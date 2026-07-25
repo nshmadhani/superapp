@@ -1,0 +1,1135 @@
+# Cipher Phase 1 — Foundation Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Ship a pnpm monorepo web app where a tool-calling agent (OpenRouter + Vercel AI SDK) can research crypto, show Zerion-backed portfolios in chat + dashboard, and execute confirm-gated swaps — without any hardcoded “if user says X, do Y” flow logic.
+
+**Architecture:** Next.js web app talks to a Route Handler that runs `streamText` / tool loop. Domain packages expose **tools** (Zod schemas + `execute`). The model chooses tools from descriptions alone. Mutations that move value go through a structured `Plan` → Transaction Review → `confirmId` → `execute_plan` tool. Supabase stores users, wallets, plans/steps, and encrypted venue secrets (venue secrets unused until Phase 2). Turnkey creates app wallets; WalletConnect connects external wallets.
+
+**Tech Stack:**
+- pnpm workspaces + Turborepo
+- Next.js (App Router) + TypeScript
+- Vercel AI SDK (`ai`) + `@openrouter/ai-sdk-provider`
+- Supabase (Postgres + Auth optional later; service role on server)
+- Turnkey (app wallets)
+- wagmi / WalletConnect (external wallets)
+- Zerion API (portfolio)
+- DeFiLlama Yields API
+- Tavily (web search) — single websearch provider for Phase 1
+- Alchemy (single RPC provider for EVM + Solana reads/sends)
+- viem / @solana/web3.js as needed by adapters
+- Zod, Vitest
+
+**Spec:** [`docs/superpowers/specs/2026-07-25-ai-crypto-wallet-design.md`](../specs/2026-07-25-ai-crypto-wallet-design.md)  
+**Todos:** [`TODO.md`](../../../TODO.md)
+
+**Out of Phase 1 (separate plans later):** Hyperliquid / Polymarket VenueAccounts, Jupiter-Kalshi execute, bridge adapters, paymaster/relayer production wiring, Demo 5–7 full depth.
+
+## Global Constraints
+
+- **Tool-driven agent only:** Do not implement intent routers, regex flow matchers, or prompt recipes that hardcode demo scripts (“if buy HYPE then bridge…”). Behavior must emerge from tool descriptions + model reasoning.
+- **System prompt:** Goals, safety (never claim execute without confirm), and how to use tools — not step-by-step product flows.
+- **`execute_plan` is gated:** Server rejects execute unless `confirmId` matches an unexpired Plan hash in Supabase.
+- **Sessions ≠ wallets:** Wallets are user-scoped inventory; chat session only references wallet IDs when tools need them.
+- **Package manager:** pnpm only. Node `>=22`.
+- ** monorepo packages** are ESM TypeScript.
+- **One RPC provider:** Alchemy (`ALCHEMY_API_KEY`).
+- **Secrets:** never send Turnkey private key material or venue secrets to the model; tools return addresses, balances, plan summaries only.
+
+---
+
+## File structure (create in Phase 1)
+
+```text
+/
+  package.json                 # pnpm workspace root
+  pnpm-workspace.yaml
+  turbo.json
+  .env.example
+  apps/
+    web/                       # Next.js App Router
+      app/
+        layout.tsx
+        page.tsx                 # redirects to /chat
+        chat/page.tsx
+        dashboard/page.tsx
+        api/chat/route.ts        # AI SDK stream + tools
+        api/plans/[planId]/confirm/route.ts
+        api/wallets/route.ts
+      components/
+        chat-panel.tsx
+        dashboard-portfolio.tsx
+        tx-review-modal.tsx
+        wallet-picker.tsx
+      lib/
+        supabase-browser.ts
+        wagmi.ts
+  packages/
+    core/                      # shared types, plan hashing
+      src/
+        index.ts
+        plan.ts
+        wallet.ts
+        hash.ts
+    db/                        # Supabase client + migrations
+      src/
+        client.ts
+        types.ts
+      supabase/migrations/
+        001_init.sql
+    rpc/                       # Alchemy wrapper
+      src/
+        index.ts
+        evm.ts
+        solana.ts
+    zerion/
+      src/
+        client.ts
+        portfolio.ts
+    defillama/
+      src/
+        yields.ts
+    search/
+      src/
+        tavily.ts
+    turnkey/
+      src/
+        client.ts
+        wallets.ts
+    adapters/
+      src/
+        types.ts
+        swap/
+          evm-swap.ts            # Phase 1: one EVM aggregator path (e.g. 0x or LiFi quote)
+        index.ts
+    agent/
+      src/
+        index.ts
+        system-prompt.ts
+        create-cipher-agent.ts
+        tools/
+          list-wallets.ts
+          get-portfolio.ts
+          web-search.ts
+          get-yields.ts
+          create-plan.ts
+          simulate-plan.ts
+          execute-plan.ts
+          ask-user.ts            # structured clarify (wallet pick, native vs wrapped)
+```
+
+---
+
+### Task 1: Scaffold pnpm monorepo + web app
+
+**Files:**
+- Create: `package.json`, `pnpm-workspace.yaml`, `turbo.json`, `.gitignore`, `.env.example`
+- Create: `apps/web/package.json`, `apps/web/tsconfig.json`, `apps/web/next.config.ts`, `apps/web/app/layout.tsx`, `apps/web/app/page.tsx`
+- Create: `packages/core/package.json`, `packages/core/tsconfig.json`, `packages/core/src/index.ts`
+
+**Interfaces:**
+- Produces: workspace scripts `pnpm dev`, `pnpm test`, `pnpm build`; package name `@cipher/core`
+
+- [ ] **Step 1: Init workspace root**
+
+```json
+// package.json
+{
+  "name": "cipher",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  }
+}
+```
+
+```yaml
+# pnpm-workspace.yaml
+packages:
+  - "apps/*"
+  - "packages/*"
+```
+
+```json
+// turbo.json
+{
+  "$schema": "https://turbo.build/schema.json",
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": [".next/**", "dist/**"] },
+    "dev": { "cache": false, "persistent": true },
+    "test": { "dependsOn": ["^build"] },
+    "lint": {}
+  }
+}
+```
+
+- [ ] **Step 2: Create Next.js app under `apps/web`**
+
+Run: `pnpm dlx create-next-app@latest apps/web --typescript --tailwind --eslint --app --src-dir=false --import-alias "@/*" --turbopack --use-pnpm`
+
+Then set `"name": "@cipher/web"` in `apps/web/package.json` and add `"dev": "next dev --port 3000"`.
+
+- [ ] **Step 3: Create `@cipher/core` stub**
+
+```ts
+// packages/core/src/index.ts
+export type ChainRef = { chainId: number } | { cluster: "solana-mainnet" };
+
+export type WalletRef = {
+  id: string;
+  address: string;
+  chainFamily: "evm" | "solana";
+  source: "external" | "turnkey";
+  label?: string;
+};
+```
+
+`packages/core/package.json`:
+
+```json
+{
+  "name": "@cipher/core",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" }
+}
+```
+
+- [ ] **Step 4: Wire workspace dependency**
+
+In `apps/web/package.json` add `"@cipher/core": "workspace:*"`. Run `pnpm install` from repo root.
+
+- [ ] **Step 5: Smoke check**
+
+Run: `pnpm --filter @cipher/web dev`  
+Expected: Next.js serves `http://localhost:3000`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add package.json pnpm-workspace.yaml turbo.json apps packages .gitignore .env.example
+git commit -m "chore: scaffold pnpm monorepo and Next.js app"
+```
+
+---
+
+### Task 2: Plan types + hash (core)
+
+**Files:**
+- Create: `packages/core/src/plan.ts`, `packages/core/src/hash.ts`
+- Modify: `packages/core/src/index.ts`
+- Test: `packages/core/src/hash.test.ts`
+
+**Interfaces:**
+- Produces: `Plan`, `PlanStep`, `hashPlan(plan)`, `ConfirmToken`
+
+- [ ] **Step 1: Write failing test**
+
+```ts
+// packages/core/src/hash.test.ts
+import { describe, it, expect } from "vitest";
+import { hashPlan, type Plan } from "./plan";
+
+describe("hashPlan", () => {
+  it("is stable for the same plan and changes when amount changes", () => {
+    const base: Plan = {
+      id: "p1",
+      walletId: "w1",
+      steps: [
+        {
+          type: "swap",
+          chainId: 8453,
+          sellToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+          buyToken: "0x4200000000000000000000000000000000000006",
+          sellAmount: "1000000",
+          minBuyAmount: "1",
+          adapterId: "evm-swap",
+        },
+      ],
+      createdAt: "2026-07-25T00:00:00.000Z",
+      expiresAt: "2026-07-25T00:10:00.000Z",
+    };
+    const h1 = hashPlan(base);
+    const h2 = hashPlan({
+      ...base,
+      steps: [{ ...base.steps[0], sellAmount: "2000000" }],
+    });
+    expect(h1).toMatch(/^[a-f0-9]{64}$/);
+    expect(h1).not.toEqual(h2);
+  });
+});
+```
+
+- [ ] **Step 2: Add vitest to core and run (expect fail)**
+
+```json
+// packages/core/package.json scripts/devDeps
+{
+  "scripts": { "test": "vitest run" },
+  "devDependencies": { "vitest": "^3.0.0" }
+}
+```
+
+Run: `pnpm --filter @cipher/core test`  
+Expected: FAIL (module not found or hashPlan undefined)
+
+- [ ] **Step 3: Implement plan + hash**
+
+```ts
+// packages/core/src/plan.ts
+import { createHash } from "node:crypto";
+
+export type PlanStep =
+  | {
+      type: "swap";
+      chainId: number;
+      sellToken: string;
+      buyToken: string;
+      sellAmount: string;
+      minBuyAmount: string;
+      adapterId: string;
+    }
+  | {
+      type: "transfer";
+      chainId: number;
+      token: string;
+      to: string;
+      amount: string;
+      adapterId: string;
+    };
+
+export type Plan = {
+  id: string;
+  walletId: string;
+  steps: PlanStep[];
+  createdAt: string;
+  expiresAt: string;
+  summary?: string;
+};
+
+export function hashPlan(plan: Plan): string {
+  const canonical = JSON.stringify({
+    walletId: plan.walletId,
+    steps: plan.steps,
+  });
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+export type ConfirmToken = {
+  confirmId: string;
+  planId: string;
+  planHash: string;
+  expiresAt: string;
+};
+```
+
+```ts
+// packages/core/src/hash.ts — re-export if desired
+export { hashPlan } from "./plan";
+```
+
+Export from `index.ts`.
+
+- [ ] **Step 4: Run tests**
+
+Run: `pnpm --filter @cipher/core test`  
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/core
+git commit -m "feat(core): add Plan types and stable plan hash"
+```
+
+---
+
+### Task 3: Supabase schema + `@cipher/db`
+
+**Files:**
+- Create: `packages/db/package.json`, `packages/db/src/client.ts`, `packages/db/supabase/migrations/001_init.sql`
+- Test: `packages/db/src/plans.test.ts` (unit with mocked client OR integration skipped without env)
+
+**Interfaces:**
+- Produces: `createDb()`, `insertPlan`, `getPlan`, `attachConfirm`, `consumeConfirm`
+
+- [ ] **Step 1: Migration SQL**
+
+```sql
+-- packages/db/supabase/migrations/001_init.sql
+create extension if not exists "pgcrypto";
+
+create table users (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz not null default now()
+);
+
+create table wallets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  address text not null,
+  chain_family text not null check (chain_family in ('evm', 'solana')),
+  source text not null check (source in ('external', 'turnkey')),
+  turnkey_wallet_id text,
+  label text,
+  created_at timestamptz not null default now(),
+  unique (user_id, address, chain_family)
+);
+
+create table plans (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  wallet_id uuid not null references wallets(id),
+  plan_json jsonb not null,
+  plan_hash text not null,
+  status text not null default 'draft'
+    check (status in ('draft', 'awaiting_confirm', 'confirmed', 'executed', 'failed', 'expired')),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+create table plan_confirms (
+  confirm_id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references plans(id) on delete cascade,
+  plan_hash text not null,
+  consumed_at timestamptz,
+  expires_at timestamptz not null
+);
+
+create table venue_secrets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  venue text not null,
+  backing_wallet_id uuid references wallets(id),
+  ciphertext text not null,
+  created_at timestamptz not null default now()
+);
+```
+
+- [ ] **Step 2: DB client**
+
+```ts
+// packages/db/src/client.ts
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+export function createDb(env = process.env): SupabaseClient {
+  const url = env.NEXT_PUBLIC_SUPABASE_URL ?? env.SUPABASE_URL;
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Missing Supabase URL or service role key");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+```
+
+Add `@supabase/supabase-js` dependency. Document env vars in `.env.example`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+OPENROUTER_API_KEY=
+ALCHEMY_API_KEY=
+ZERION_API_KEY=
+TAVILY_API_KEY=
+TURNKEY_API_PUBLIC_KEY=
+TURNKEY_API_PRIVATE_KEY=
+TURNKEY_ORGANIZATION_ID=
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+```
+
+- [ ] **Step 3: Plan repository helpers**
+
+```ts
+// packages/db/src/plans.ts
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Plan } from "@cipher/core";
+import { hashPlan } from "@cipher/core";
+
+export async function savePlan(
+  db: SupabaseClient,
+  userId: string,
+  plan: Plan,
+) {
+  const planHash = hashPlan(plan);
+  const { data, error } = await db
+    .from("plans")
+    .insert({
+      id: plan.id,
+      user_id: userId,
+      wallet_id: plan.walletId,
+      plan_json: plan,
+      plan_hash: planHash,
+      status: "awaiting_confirm",
+      expires_at: plan.expiresAt,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return { planId: data.id as string, planHash };
+}
+
+export async function createConfirm(
+  db: SupabaseClient,
+  planId: string,
+  planHash: string,
+  expiresAt: string,
+) {
+  const { data, error } = await db
+    .from("plan_confirms")
+    .insert({ plan_id: planId, plan_hash: planHash, expires_at: expiresAt })
+    .select("confirm_id")
+    .single();
+  if (error) throw error;
+  return data.confirm_id as string;
+}
+
+export async function consumeConfirm(
+  db: SupabaseClient,
+  confirmId: string,
+  expectedHash: string,
+) {
+  const { data, error } = await db
+    .from("plan_confirms")
+    .select("*")
+    .eq("confirm_id", confirmId)
+    .is("consumed_at", null)
+    .gt("expires_at", new Date().toISOString())
+    .single();
+  if (error || !data) throw new Error("Invalid or expired confirmId");
+  if (data.plan_hash !== expectedHash) throw new Error("Plan hash mismatch");
+  await db
+    .from("plan_confirms")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("confirm_id", confirmId);
+  return data.plan_id as string;
+}
+```
+
+- [ ] **Step 4: Apply migration** in Supabase project (CLI or dashboard). Verify tables exist.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add packages/db .env.example
+git commit -m "feat(db): Supabase schema for wallets, plans, confirms"
+```
+
+---
+
+### Task 4: Alchemy RPC package
+
+**Files:**
+- Create: `packages/rpc/src/index.ts`, `packages/rpc/src/evm.ts`
+- Test: `packages/rpc/src/evm.test.ts` (skip without `ALCHEMY_API_KEY`)
+
+**Interfaces:**
+- Produces: `getEvmClient(chainId)`, `getAlchemyBaseUrl(chainId)`
+
+- [ ] **Step 1: Implement EVM client factory**
+
+```ts
+// packages/rpc/src/evm.ts
+import { createPublicClient, http, type Chain } from "viem";
+import { mainnet, base, arbitrum } from "viem/chains";
+
+const chains: Record<number, Chain> = {
+  1: mainnet,
+  8453: base,
+  42161: arbitrum,
+};
+
+const alchemySlug: Record<number, string> = {
+  1: "eth-mainnet",
+  8453: "base-mainnet",
+  42161: "arb-mainnet",
+};
+
+export function getAlchemyHttpUrl(chainId: number, apiKey: string): string {
+  const slug = alchemySlug[chainId];
+  if (!slug) throw new Error(`Unsupported chainId ${chainId}`);
+  return `https://${slug}.g.alchemy.com/v2/${apiKey}`;
+}
+
+export function getEvmPublicClient(chainId: number, apiKey = process.env.ALCHEMY_API_KEY!) {
+  const chain = chains[chainId];
+  if (!chain) throw new Error(`Unsupported chainId ${chainId}`);
+  return createPublicClient({
+    chain,
+    transport: http(getAlchemyHttpUrl(chainId, apiKey)),
+  });
+}
+```
+
+- [ ] **Step 2: Unit test URL mapping**
+
+```ts
+import { describe, it, expect } from "vitest";
+import { getAlchemyHttpUrl } from "./evm";
+
+describe("getAlchemyHttpUrl", () => {
+  it("maps base", () => {
+    expect(getAlchemyHttpUrl(8453, "KEY")).toBe(
+      "https://base-mainnet.g.alchemy.com/v2/KEY",
+    );
+  });
+});
+```
+
+Run: `pnpm --filter @cipher/rpc test` — Expected: PASS
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/rpc
+git commit -m "feat(rpc): Alchemy viem public clients"
+```
+
+---
+
+### Task 5: Zerion portfolio client
+
+**Files:**
+- Create: `packages/zerion/src/client.ts`, `packages/zerion/src/portfolio.ts`
+- Test: `packages/zerion/src/portfolio.test.ts` (mock fetch)
+
+**Interfaces:**
+- Produces: `fetchPortfolio(address: string): Promise<PortfolioSnapshot>`
+
+- [ ] **Step 1: Types + client**
+
+```ts
+// packages/zerion/src/portfolio.ts
+export type PortfolioPosition = {
+  symbol: string;
+  name: string;
+  quantity: string;
+  valueUsd: number | null;
+  chainId: string;
+  address: string | null;
+};
+
+export type PortfolioSnapshot = {
+  address: string;
+  positions: PortfolioPosition[];
+  totalValueUsd: number;
+  asOf: string;
+};
+
+export async function fetchPortfolio(
+  address: string,
+  apiKey = process.env.ZERION_API_KEY!,
+): Promise<PortfolioSnapshot> {
+  const url = new URL(
+    `https://api.zerion.io/v1/wallets/${address}/positions/`,
+  );
+  url.searchParams.set("filter[positions]", "only_simple");
+  url.searchParams.set("currency", "usd");
+
+  const res = await fetch(url, {
+    headers: {
+      accept: "application/json",
+      authorization: `Basic ${Buffer.from(apiKey + ":").toString("base64")}`,
+    },
+  });
+  if (!res.ok) throw new Error(`Zerion ${res.status}`);
+  const body = (await res.json()) as {
+    data: Array<{
+      attributes: {
+        quantity: { float: number };
+        value: number | null;
+        fungible_info: { symbol: string; name: string; implementations?: Array<{ chain_id: string; address: string | null }> };
+      };
+    }>;
+  };
+
+  const positions: PortfolioPosition[] = body.data.map((row) => {
+    const impl = row.attributes.fungible_info.implementations?.[0];
+    return {
+      symbol: row.attributes.fungible_info.symbol,
+      name: row.attributes.fungible_info.name,
+      quantity: String(row.attributes.quantity.float),
+      valueUsd: row.attributes.value,
+      chainId: impl?.chain_id ?? "unknown",
+      address: impl?.address ?? null,
+    };
+  });
+
+  const totalValueUsd = positions.reduce((s, p) => s + (p.valueUsd ?? 0), 0);
+  return {
+    address,
+    positions,
+    totalValueUsd,
+    asOf: new Date().toISOString(),
+  };
+}
+```
+
+- [ ] **Step 2: Mock test**
+
+```ts
+import { describe, it, expect, vi } from "vitest";
+import { fetchPortfolio } from "./portfolio";
+
+describe("fetchPortfolio", () => {
+  it("maps zerion payload", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              attributes: {
+                quantity: { float: 1.5 },
+                value: 3000,
+                fungible_info: {
+                  symbol: "ETH",
+                  name: "Ether",
+                  implementations: [{ chain_id: "base", address: null }],
+                },
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    const snap = await fetchPortfolio("0xabc", "test-key");
+    expect(snap.positions[0].symbol).toBe("ETH");
+    expect(snap.totalValueUsd).toBe(3000);
+    vi.unstubAllGlobals();
+  });
+});
+```
+
+Run: `pnpm --filter @cipher/zerion test` — Expected: PASS
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/zerion
+git commit -m "feat(zerion): portfolio snapshot client"
+```
+
+---
+
+### Task 6: DeFiLlama + Tavily packages
+
+**Files:**
+- Create: `packages/defillama/src/yields.ts`, `packages/search/src/tavily.ts`
+- Tests with mocked fetch in each package
+
+**Interfaces:**
+- Produces: `fetchUsdcYields(limit)`, `webSearch(query)`
+
+- [ ] **Step 1: DeFiLlama yields**
+
+```ts
+// packages/defillama/src/yields.ts
+export type YieldPool = {
+  pool: string;
+  project: string;
+  chain: string;
+  symbol: string;
+  tvlUsd: number;
+  apy: number;
+};
+
+export async function fetchUsdcYields(limit = 10): Promise<YieldPool[]> {
+  const res = await fetch("https://yields.llama.fi/pools");
+  if (!res.ok) throw new Error(`DeFiLlama ${res.status}`);
+  const body = (await res.json()) as { data: YieldPool[] };
+  return body.data
+    .filter((p) => p.symbol?.toUpperCase().includes("USDC") && p.tvlUsd > 1_000_000)
+    .sort((a, b) => b.tvlUsd - a.tvlUsd)
+    .slice(0, limit)
+    .map((p) => ({
+      pool: p.pool,
+      project: p.project,
+      chain: p.chain,
+      symbol: p.symbol,
+      tvlUsd: p.tvlUsd,
+      apy: p.apy,
+    }));
+}
+```
+
+- [ ] **Step 2: Tavily search**
+
+```ts
+// packages/search/src/tavily.ts
+export type SearchHit = { title: string; url: string; content: string };
+
+export async function webSearch(
+  query: string,
+  apiKey = process.env.TAVILY_API_KEY!,
+): Promise<SearchHit[]> {
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      api_key: apiKey,
+      query,
+      search_depth: "basic",
+      max_results: 5,
+    }),
+  });
+  if (!res.ok) throw new Error(`Tavily ${res.status}`);
+  const body = (await res.json()) as {
+    results: Array<{ title: string; url: string; content: string }>;
+  };
+  return body.results.map((r) => ({
+    title: r.title,
+    url: r.url,
+    content: r.content,
+  }));
+}
+```
+
+- [ ] **Step 3: Mock tests + commit**
+
+```bash
+git add packages/defillama packages/search
+git commit -m "feat: DeFiLlama yields and Tavily web search clients"
+```
+
+---
+
+### Task 7: Turnkey wallet package (create app wallet)
+
+**Files:**
+- Create: `packages/turnkey/src/client.ts`, `packages/turnkey/src/wallets.ts`
+
+**Interfaces:**
+- Produces: `createEvmWallet(userId): Promise<{ turnkeyWalletId, address }>`
+
+- [ ] **Step 1: Wrap Turnkey SDK**
+
+Use `@turnkey/sdk-server` (or current Turnkey server SDK). Implement:
+
+```ts
+// packages/turnkey/src/wallets.ts — shape
+export async function createEvmWallet(params: {
+  organizationId: string;
+  // turnkey API credentials from env
+}): Promise<{ turnkeyWalletId: string; address: `0x${string}` }> {
+  // Call Turnkey createWallet / createWalletAccounts for Ethereum
+  // Return wallet id + address — never return private key material
+  throw new Error("Implement with Turnkey server SDK");
+}
+```
+
+Replace throw with real SDK calls per [Turnkey docs](https://docs.turnkey.com/). Persist resulting address via `@cipher/db` wallets table (`source: "turnkey"`).
+
+- [ ] **Step 2: Manual smoke** — create one wallet in dev org; confirm address on Base explorer empty account.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add packages/turnkey
+git commit -m "feat(turnkey): create app EVM wallets"
+```
+
+---
+
+### Task 8: Swap adapter (EVM quote + calldata)
+
+**Files:**
+- Create: `packages/adapters/src/types.ts`, `packages/adapters/src/swap/evm-swap.ts`
+- Test: `packages/adapters/src/swap/evm-swap.test.ts`
+
+**Interfaces:**
+- Produces: `quoteEvmSwap(input) -> { callData, to, value, minBuyAmount, displayRoute }`
+
+Phase 1 uses **one** quote API (0x Swap API or LiFi). Pick **0x** on Base for demos.
+
+```ts
+// packages/adapters/src/swap/evm-swap.ts
+export type EvmSwapQuoteRequest = {
+  chainId: number;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: string;
+  taker: string;
+};
+
+export type EvmSwapQuote = {
+  adapterId: "evm-swap";
+  to: string;
+  data: string;
+  value: string;
+  minBuyAmount: string;
+  displayRoute: string;
+};
+
+export async function quoteEvmSwap(
+  req: EvmSwapQuoteRequest,
+  apiKey = process.env.ZEROX_API_KEY,
+): Promise<EvmSwapQuote> {
+  const url = new URL("https://api.0x.org/swap/allowance-holder/quote");
+  url.searchParams.set("chainId", String(req.chainId));
+  url.searchParams.set("sellToken", req.sellToken);
+  url.searchParams.set("buyToken", req.buyToken);
+  url.searchParams.set("sellAmount", req.sellAmount);
+  url.searchParams.set("taker", req.taker);
+  const res = await fetch(url, {
+    headers: { "0x-api-key": apiKey ?? "", "0x-version": "v2" },
+  });
+  if (!res.ok) throw new Error(`0x ${res.status}`);
+  const q = (await res.json()) as {
+    transaction: { to: string; data: string; value: string };
+    minBuyAmount: string;
+  };
+  return {
+    adapterId: "evm-swap",
+    to: q.transaction.to,
+    data: q.transaction.data,
+    value: q.transaction.value,
+    minBuyAmount: q.minBuyAmount,
+    displayRoute: `${req.sellToken} -> ${req.buyToken}`,
+  };
+}
+```
+
+- [ ] Add `ZEROX_API_KEY` to `.env.example`
+- [ ] Mock test for mapping
+- [ ] Commit: `feat(adapters): EVM swap quotes via 0x`
+
+---
+
+### Task 9: Agent tools + system prompt (tool-driven)
+
+**Files:**
+- Create: all files under `packages/agent/src/**`
+- Test: `packages/agent/src/tools/execute-plan.test.ts` (reject without confirm)
+
+**Interfaces:**
+- Produces: `createCipherTools(ctx)`, `CIPHER_SYSTEM_PROMPT`, `runCipherAgent({ messages, ctx })`
+
+- [ ] **Step 1: System prompt — principles only, no demo scripts**
+
+```ts
+// packages/agent/src/system-prompt.ts
+export const CIPHER_SYSTEM_PROMPT = `
+You are Cipher, a crypto co-pilot. You help users research markets and act on-chain through tools.
+
+Rules:
+- Prefer tools over guessing balances, prices, or protocol state.
+- Never invent token addresses; use tool results.
+- To move funds: create_plan → (user confirms in UI) → execute_plan with confirmId.
+- Never claim a transaction was sent unless execute_plan succeeded.
+- If wallet or asset target is ambiguous, call ask_user.
+- Do not follow a fixed product script. Choose tools based on the user message and prior tool results.
+`.trim();
+```
+
+- [ ] **Step 2: Tool: get_portfolio**
+
+```ts
+// packages/agent/src/tools/get-portfolio.ts
+import { tool } from "ai";
+import { z } from "zod";
+import { fetchPortfolio } from "@cipher/zerion";
+
+export function getPortfolioTool() {
+  return tool({
+    description:
+      "Fetch current token balances and USD values for a wallet address via Zerion.",
+    inputSchema: z.object({
+      address: z.string().describe("EVM or supported wallet address"),
+    }),
+    execute: async ({ address }) => fetchPortfolio(address),
+  });
+}
+```
+
+- [ ] **Step 3: Tools: web_search, get_yields, list_wallets, ask_user**
+
+Same pattern: thin wrappers around `@cipher/search`, `@cipher/defillama`, and DB wallet list. `ask_user` returns `{ type: "clarification", question, options? }` for the UI to render — does not invent answers.
+
+- [ ] **Step 4: create_plan + simulate_plan + execute_plan**
+
+```ts
+// packages/agent/src/tools/create-plan.ts (shape)
+// - Build Plan from swap fields + walletId
+// - Quote via quoteEvmSwap
+// - savePlan + createConfirm in Supabase
+// - Return { plan, confirmId, planHash, review } for Tx Review UI
+```
+
+```ts
+// execute-plan tool
+// - consumeConfirm(confirmId, planHash)
+// - Return unsigned tx payload { to, data, value, chainId } for the client / Turnkey to sign
+// - Phase 1: do NOT broadcast inside the model tool without confirm; broadcasting happens after UI confirm hits /api/plans/.../confirm which then allows execute_plan OR returns tx for wallet_client.sendTransaction
+```
+
+**Phase 1 signing UX:**  
+`POST /api/plans/:id/confirm` sets confirm consumed + returns tx request → browser wagmi `sendTransaction` (external) or Turnkey sign (app wallet). Agent `execute_plan` may orchestrate the same server path but must check confirm.
+
+- [ ] **Step 5: Unit test execute gate**
+
+```ts
+import { describe, it, expect } from "vitest";
+// mock db consumeConfirm to throw
+// calling execute tool without valid confirmId yields error payload, not broadcast
+```
+
+- [ ] **Step 6: `createCipherAgent`**
+
+```ts
+// packages/agent/src/create-cipher-agent.ts
+import { streamText, stepCountIs } from "ai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { CIPHER_SYSTEM_PROMPT } from "./system-prompt";
+import { createCipherTools } from "./tools";
+
+export function createCipherAgent(ctx: { userId: string }) {
+  const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+  });
+  const tools = createCipherTools(ctx);
+
+  return {
+    stream(messages: Parameters<typeof streamText>[0]["messages"]) {
+      return streamText({
+        model: openrouter("anthropic/claude-sonnet-4"),
+        system: CIPHER_SYSTEM_PROMPT,
+        messages,
+        tools,
+        stopWhen: stepCountIs(12),
+      });
+    },
+  };
+}
+```
+
+Pin model id to whatever OpenRouter tool-capable model you prefer; keep it in env `OPENROUTER_MODEL`.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add packages/agent
+git commit -m "feat(agent): tool-driven Cipher agent with confirm-gated plans"
+```
+
+---
+
+### Task 10: Chat API + UI (chat, dashboard, review)
+
+**Files:**
+- Create: `apps/web/app/api/chat/route.ts`, chat/dashboard pages, components listed in file structure
+- Wire wagmi + WalletConnect for external connect; Turnkey create button
+
+- [ ] **Step 1: Chat route**
+
+```ts
+// apps/web/app/api/chat/route.ts
+import { createCipherAgent } from "@cipher/agent";
+
+export async function POST(req: Request) {
+  const { messages, userId } = await req.json();
+  const agent = createCipherAgent({ userId });
+  const result = agent.stream(messages);
+  return result.toUIMessageStreamResponse();
+}
+```
+
+(Adjust to exact AI SDK UI message helpers used by your `ai` version.)
+
+- [ ] **Step 2: Chat panel** — `useChat` from `@ai-sdk/react`; render tool parts (portfolio cards, search citations, plan review).
+
+- [ ] **Step 3: Dashboard** — on wallet select, call Zerion via small `GET /api/portfolio?address=` (same `fetchPortfolio`) so chat and dashboard share one function.
+
+- [ ] **Step 4: Tx Review modal** — when tool result includes `confirmId` + plan, show structured fields; Confirm calls `POST /api/plans/:id/confirm` then wallet `sendTransaction`.
+
+- [ ] **Step 5: Manual demo checklist**
+  1. Connect external wallet  
+  2. Ask “what’s in my wallet?” → portfolio tool fires  
+  3. Dashboard shows same address balances  
+  4. Ask a research question → web_search tool  
+  5. Ask to swap small USDC→ETH on Base → create_plan → review → confirm → tx  
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add apps/web
+git commit -m "feat(web): chat, dashboard, and transaction review UI"
+```
+
+---
+
+### Task 11: Phase 1 verification gate
+
+- [ ] **Step 1: Run unit tests**
+
+Run: `pnpm test`  
+Expected: all package tests PASS
+
+- [ ] **Step 2: Run web build**
+
+Run: `pnpm --filter @cipher/web build`  
+Expected: success
+
+- [ ] **Step 3: Record Phase 1 demo notes** in `TODO.md` (what worked / blocked)
+
+- [ ] **Step 4: Commit** if any fixups
+
+---
+
+## Phase 2+ (separate plans — do not implement in Phase 1)
+
+| Phase | Plan focus |
+|-------|------------|
+| **2** | VenueAccount (HL + Polymarket), Supabase `venue_secrets`, venue tools |
+| **3** | Jupiter swaps / Kalshi-via-Jupiter; bridge adapter; Demo 4 multi-leg saga worker |
+| **4** | Paymaster/relayer; Demo 7 lend execute; Demo 5 recovery tooling |
+
+Each gets its own file under `docs/superpowers/plans/`.
+
+---
+
+## Spec coverage (self-review)
+
+| Spec area | Phase 1 task |
+|-----------|----------------|
+| Tool-driven / no hardcoded flows | Task 9 system prompt + tools only |
+| Chat + dashboard portfolio | Tasks 5, 10 |
+| Open research | Tasks 6, 9 `web_search` |
+| Confirm-gated execute | Tasks 2, 3, 9, 10 |
+| Turnkey + external connect | Tasks 7, 10 |
+| Zerion | Task 5 |
+| DeFiLlama | Task 6 |
+| Supabase plans/secrets tables | Task 3 (secrets table ready; HL/Poly unused) |
+| Alchemy RPC | Task 4 |
+| VenueAccount HL/Poly | Phase 2 plan |
+| Jupiter Kalshi | Phase 3 plan |
+| Relayer/paymaster | Phase 4 plan |
+
+**Placeholder scan:** Turnkey step references SDK docs for exact API — implementer must fill real Turnkey calls (no fake production keys). 0x chosen explicitly as Phase 1 swap venue.
+
+---
+
+## Env checklist
+
+```bash
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=anthropic/claude-sonnet-4
+ALCHEMY_API_KEY=
+ZERION_API_KEY=
+TAVILY_API_KEY=
+ZEROX_API_KEY=
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+TURNKEY_API_PUBLIC_KEY=
+TURNKEY_API_PRIVATE_KEY=
+TURNKEY_ORGANIZATION_ID=
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+```
