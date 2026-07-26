@@ -22,7 +22,8 @@ A fake-but-finished Cipher you can open and walk through for YC. No typing, no e
 
 ## Surfaces
 
-- **Chats:** Prebuilt message threads using existing `AgentRunView`, portfolio/citation cards, and a static confirmed plan card.
+- **Chats:** Prebuilt message threads using existing `AgentRunView`, portfolio/citation cards, and plan cards.
+  - **Swap · Bridge · Lend** is **one** multi-step saga with multi-wallet signing (Trading signs swap+bridge; Solana signs lend execute — not discovery-only).
 - **Agents:** Control panel — what was asked, configuration, TA chart/signal when relevant, run activity feed.
 - **Dashboard:** Multi-wallet overview with group-by wallet + chain chips and drill-down.
 

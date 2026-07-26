@@ -15,13 +15,30 @@ import {
   extractPlanReviews,
   extractPortfolios,
   textFromParts,
+  toolOutput,
 } from "@/components/chat/tool-extractors";
 import { DemoPlanCard } from "./demo-plan-card";
+import {
+  DemoMultiStepCard,
+  type MultiStepPlan,
+} from "./demo-multi-step-card";
 import { getDemoChat } from "@/lib/demo/fixtures";
+
+function extractMultiStepPlans(parts: UIMessage["parts"]): MultiStepPlan[] {
+  const out: MultiStepPlan[] = [];
+  for (const part of parts ?? []) {
+    const output = toolOutput(part) as MultiStepPlan | undefined;
+    if (output?.type === "multi_step_plan" && Array.isArray(output.legs)) {
+      out.push(output);
+    }
+  }
+  return out;
+}
 
 function DemoMessage({ message }: { message: UIMessage }) {
   const steps = extractAgentSteps(message.parts);
   const reviews = extractPlanReviews(message.parts);
+  const multiPlans = extractMultiStepPlans(message.parts);
   const citations = extractCitations(message.parts);
   const portfolios = extractPortfolios(message.parts);
   const clarifications = extractClarifications(message.parts);
@@ -53,6 +70,9 @@ function DemoMessage({ message }: { message: UIMessage }) {
       <CitationsCard hits={citations} />
       {clarifications.map((c, idx) => (
         <ClarificationCard key={`${message.id}-ask-${idx}`} item={c} />
+      ))}
+      {multiPlans.map((p, idx) => (
+        <DemoMultiStepCard key={`${message.id}-multi-${idx}`} plan={p} />
       ))}
       {reviews.map((r, idx) => (
         <DemoPlanCard key={`${message.id}-plan-${idx}`} review={r} />
