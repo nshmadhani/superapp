@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "@turnkey/react-wallet-kit/styles.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { AppShell } from "@/components/app-shell";
@@ -16,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cipher",
-  description: "AI crypto co-pilot",
+  title: "Cipher — YC walkthrough",
+  description: "AI crypto co-pilot demo",
 };
 
 export default function RootLayout({
