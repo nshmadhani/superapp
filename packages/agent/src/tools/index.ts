@@ -5,6 +5,7 @@ import { getYieldsTool } from "./get-yields";
 import { listWalletsTool } from "./list-wallets";
 import { askUserTool } from "./ask-user";
 import { createPlanTool } from "./create-plan";
+import { createActionPlanTool } from "./create-action-plan";
 import { simulatePlanTool } from "./simulate-plan";
 import { executePlanTool } from "./execute-plan";
 import { spawnAgentTool } from "./spawn-agent";
@@ -21,6 +22,7 @@ export function createCipherTools(ctx: AgentContext): Record<string, Tool> {
     get_yields: getYieldsTool(),
     ask_user: askUserTool(),
     create_plan: createPlanTool(ctx),
+    create_action_plan: createActionPlanTool(ctx),
     simulate_plan: simulatePlanTool(),
     execute_plan: executePlanTool(ctx),
     spawn_agent: spawnAgentTool(ctx),

@@ -8,7 +8,7 @@
 
 Ship three product surfaces for the YC demo: **Chat · Agents · Dashboard**.
 
-- **Chat** — interactive swap / bridge / lend (existing LiFi + yields). Can spawn agent runs.
+- **Chat** — interactive swap / bridge / **Morpho lend** via `create_action_plan` (multi-step, multi-wallet). Can spawn agent runs.
 - **Agents** — first-class one-shot autonomous jobs (DCA, TA, DAO research) executed in **E2B** sandboxes.
 - **Dashboard** — existing portfolio page with clearer multi-wallet / chain group-by.
 
@@ -58,8 +58,16 @@ Data is fetched server-side, then injected into the E2B sandbox for analysis (in
 - UI: `/agents`, `/agents/[runId]`; sidebar nav item
 - Chat tool: `spawn_agent` → creates run, returns link
 
+## Action plan (swap → bridge → Morpho lend)
+
+- Tool: `create_action_plan` — LI.FI transfer leg + optional Morpho MetaMorpho approve + ERC-4626 deposit
+- Plan stores `stepExecutions[]` with per-leg `walletId` + calldata
+- Tx Review: one confirm, then sequential Turnkey signs; wait for LI.FI `DONE` before lend legs
+- Morpho vault discovery: Morpho GraphQL (`blue-api.morpho.org`) + Base/Ethereum fallbacks
+- `get_yields` returns executable Morpho vaults with `vaultAddress` / `chainId`
+
 ## Out of scope (this PR)
 
 - Persistent cron / recurring DCA execution
-- Real lend deposit adapter
 - Redis/SQS queue (in-process worker is enough for demo)
+- Morpho Blue market supply (vault ERC-4626 only for now)

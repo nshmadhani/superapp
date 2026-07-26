@@ -62,6 +62,13 @@ const TOOLS: Record<string, ToolMeta> = {
     description: "Draft a confirm-gated transaction plan",
     Icon: Waypoints,
   },
+  create_action_plan: {
+    id: "create_action_plan",
+    label: "Action plan",
+    verb: "Building multi-step plan",
+    description: "Swap/bridge + Morpho lend across wallets",
+    Icon: Waypoints,
+  },
   simulate_plan: {
     id: "simulate_plan",
     label: "Simulate",

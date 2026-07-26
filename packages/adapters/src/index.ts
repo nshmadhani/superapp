@@ -15,3 +15,16 @@ export {
 } from "./lifi/chains";
 
 export { createLifiClient } from "./lifi/client";
+
+export {
+  quoteMorphoLend,
+  type MorphoLendQuote,
+  type MorphoLendRequest,
+} from "./morpho/lend";
+
+export {
+  fetchMorphoUsdcVaults,
+  resolveMorphoVault,
+  FALLBACK_MORPHO_USDC_VAULTS,
+  type MorphoVault,
+} from "./morpho/vaults";

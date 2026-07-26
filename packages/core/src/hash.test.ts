@@ -22,9 +22,13 @@ describe("hashPlan", () => {
       expiresAt: "2026-07-25T00:10:00.000Z",
     };
     const h1 = hashPlan(base);
+    const step0 = base.steps[0]!;
+    if (step0.type !== "swap" && step0.type !== "bridge") {
+      throw new Error("expected swap/bridge step");
+    }
     const h2 = hashPlan({
       ...base,
-      steps: [{ ...base.steps[0]!, sellAmount: "2000000" }],
+      steps: [{ ...step0, sellAmount: "2000000" }],
     });
     expect(h1).toMatch(/^[a-f0-9]{64}$/);
     expect(h1).not.toEqual(h2);

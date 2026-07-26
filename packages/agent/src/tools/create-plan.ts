@@ -72,12 +72,25 @@ export function createPlanTool(ctx: AgentContext) {
 
         const now = Date.now();
         const stepType = quote.isCrossChain ? "bridge" : "swap";
+        const unsignedTx = quote.unsignedTx
+          ? {
+              ...quote.unsignedTx,
+              minBuyAmount: quote.minBuyAmount,
+              displayRoute: quote.displayRoute,
+              tool: quote.tool,
+              toolName: quote.toolName,
+              toChainId: quote.toChainId,
+              executionDurationSec: quote.executionDurationSec,
+              isCrossChain: quote.isCrossChain,
+            }
+          : undefined;
         const plan: Plan = {
           id: randomUUID(),
           walletId: wallet.id,
           steps: [
             {
               type: stepType,
+              walletId: wallet.id,
               fromChainId: input.fromChainId,
               toChainId: input.toChainId,
               sellToken: input.sellToken,
@@ -86,25 +99,29 @@ export function createPlanTool(ctx: AgentContext) {
               minBuyAmount: quote.minBuyAmount,
               adapterId: "lifi",
               tool: quote.tool,
+              label: quote.displayRoute,
             },
           ],
           createdAt: new Date(now).toISOString(),
           expiresAt: new Date(now + 10 * 60_000).toISOString(),
           summary: input.summary ?? quote.displayRoute,
-          unsignedTx: quote.unsignedTx
-            ? {
-                ...quote.unsignedTx,
-                minBuyAmount: quote.minBuyAmount,
-                displayRoute: quote.displayRoute,
-                tool: quote.tool,
-                toolName: quote.toolName,
-                toChainId: quote.toChainId,
-                executionDurationSec: quote.executionDurationSec,
-                isCrossChain: quote.isCrossChain,
-              }
-            : undefined,
+          unsignedTx,
           lifiStep: quote.step,
           lifiRoute: quote.route,
+          stepExecutions: unsignedTx
+            ? [
+                {
+                  stepIndex: 0,
+                  walletId: wallet.id,
+                  kind: stepType,
+                  label: quote.displayRoute,
+                  unsignedTx,
+                  lifiStep: quote.step,
+                  lifiRoute: quote.route,
+                  waitForLifi: quote.isCrossChain,
+                },
+              ]
+            : undefined,
         };
 
         const { planId, planHash } = await store.savePlan(ctx.userId, plan);

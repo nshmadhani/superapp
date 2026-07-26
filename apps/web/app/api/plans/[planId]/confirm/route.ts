@@ -35,7 +35,10 @@ export async function POST(
       unsignedTx: result.unsignedTx,
       lifiStep: result.lifiStep,
       lifiRoute: result.lifiRoute,
-      message: "Plan confirmed. Execute via LI.FI / Turnkey.",
+      plan: result.plan,
+      wallets: result.wallets,
+      message:
+        "Plan confirmed. Sign each step with the matching Turnkey wallet (LI.FI then Morpho if present).",
     });
   } catch (err) {
     if (err instanceof AuthError) {

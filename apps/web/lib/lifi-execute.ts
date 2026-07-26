@@ -146,7 +146,7 @@ export async function executeLifiAfterConfirm(opts: {
   );
 
   if (to && data && isLifiEvmChain(chainId)) {
-    await opts.handleSendTransaction({
+    const sent = await opts.handleSendTransaction({
       transaction: {
         from: opts.walletAddress,
         to,
@@ -155,7 +155,7 @@ export async function executeLifiAfterConfirm(opts: {
         caip2: `eip155:${chainId}`,
       },
     });
-    return { mode: "turnkey" };
+    return { mode: "turnkey", txHash: extractTxHash(sent) };
   }
 
   if (data && isLifiSolanaChain(chainId)) {
@@ -180,4 +180,18 @@ export async function executeLifiAfterConfirm(opts: {
   throw new Error(
     "No executable source-chain transaction on this plan. Re-quote via create_plan.",
   );
+}
+
+function extractTxHash(sent: unknown): string | undefined {
+  if (!sent || typeof sent !== "object") return undefined;
+  const o = sent as Record<string, unknown>;
+  for (const key of ["hash", "txHash", "transactionHash", "id"]) {
+    const v = o[key];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  const nested = o.transaction ?? o.result;
+  if (nested && typeof nested === "object") {
+    return extractTxHash(nested);
+  }
+  return undefined;
 }

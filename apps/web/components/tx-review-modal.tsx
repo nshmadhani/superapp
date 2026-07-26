@@ -1,9 +1,9 @@
 "use client";
 
-import { isLifiSolanaChain } from "@cipher/core";
+import { isLifiSolanaChain, type PlanStepExecution } from "@cipher/core";
 import { useTurnkey } from "@turnkey/react-wallet-kit";
 import { ExternalLink, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   executeLifiAfterConfirm,
   findWalletAccount,
@@ -25,6 +25,7 @@ type PlanReview = {
     expiresAt: string;
     lifiStep?: unknown;
     lifiRoute?: unknown;
+    stepExecutions?: PlanStepExecution[];
     unsignedTx?: {
       to: string;
       data: string;
@@ -52,8 +53,11 @@ type PlanReview = {
     executionDurationSec?: number;
     isCrossChain?: boolean;
     toAmount?: string;
+    multiStep?: boolean;
+    stepCount?: number;
   };
   wallet: { address: string; id: string };
+  wallets?: Record<string, { address: string; id: string }>;
 };
 
 export type TxReviewOutcome = {
@@ -117,6 +121,40 @@ function labelForLifiStatus(s: LifiUiStatus): string {
   }
 }
 
+async function waitForLifiDone(opts: {
+  txHash: string;
+  fromChain: number;
+  toChain: number;
+  bridgeTool?: string;
+  onStatus: (s: LifiUiStatus, receiving?: string) => void;
+  timeoutMs?: number;
+}): Promise<boolean> {
+  const deadline = Date.now() + (opts.timeoutMs ?? 180_000);
+  while (Date.now() < deadline) {
+    const params = new URLSearchParams({
+      txHash: opts.txHash,
+      fromChain: String(opts.fromChain),
+      toChain: String(opts.toChain),
+    });
+    if (opts.bridgeTool) params.set("bridge", opts.bridgeTool);
+    try {
+      const res = await fetch(`/api/lifi/status?${params}`);
+      const data = (await res.json()) as {
+        status?: string;
+        receiving?: { txHash?: string };
+      };
+      const st = (data.status ?? "unknown") as LifiUiStatus;
+      opts.onStatus(st, data.receiving?.txHash);
+      if (st === "DONE") return true;
+      if (st === "FAILED" || st === "REFUNDED") return false;
+    } catch {
+      opts.onStatus("unknown");
+    }
+    await new Promise((r) => setTimeout(r, 4000));
+  }
+  return false;
+}
+
 export function TxReviewCard({
   review,
   onDismiss,
@@ -131,6 +169,7 @@ export function TxReviewCard({
     | "idle"
     | "confirming"
     | "signing"
+    | "waiting_bridge"
     | "rejecting"
     | "done"
     | "rejected"
@@ -141,6 +180,8 @@ export function TxReviewCard({
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null);
   const [lifiStatus, setLifiStatus] = useState<LifiUiStatus>("idle");
   const [receivingTxHash, setReceivingTxHash] = useState<string | null>(null);
+  const [activeStep, setActiveStep] = useState(0);
+  const [stepNotes, setStepNotes] = useState<string[]>([]);
 
   const q = review.quote;
   const utx = review.plan.unsignedTx;
@@ -155,10 +196,53 @@ export function TxReviewCard({
   const busy =
     status === "confirming" ||
     status === "signing" ||
+    status === "waiting_bridge" ||
     status === "rejecting";
 
+  const legs = useMemo((): PlanStepExecution[] => {
+    if (review.plan.stepExecutions?.length) return review.plan.stepExecutions;
+    return [
+      {
+        stepIndex: 0,
+        walletId: review.wallet.id,
+        kind: cross ? "bridge" : "swap",
+        label: routeLabel,
+        unsignedTx: {
+          to: utx?.to ?? q.to,
+          data: utx?.data ?? q.data,
+          value: utx?.value ?? q.value,
+          chainId: fromChain,
+          toChainId: toChain,
+          tool: bridgeTool,
+          toolName,
+          isCrossChain: cross,
+          minBuyAmount: q.minBuyAmount,
+          displayRoute: routeLabel,
+          executionDurationSec: eta,
+        },
+        lifiStep: review.plan.lifiStep,
+        lifiRoute: review.plan.lifiRoute,
+        waitForLifi: cross,
+      },
+    ];
+  }, [
+    review.plan.stepExecutions,
+    review.plan.lifiStep,
+    review.plan.lifiRoute,
+    review.wallet.id,
+    cross,
+    routeLabel,
+    utx,
+    q,
+    fromChain,
+    toChain,
+    bridgeTool,
+    toolName,
+    eta,
+  ]);
+
   useEffect(() => {
-    if (status !== "done" || !txHash) return;
+    if (status !== "done" || !txHash || legs.length > 1) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -174,7 +258,6 @@ export function TxReviewCard({
         const data = (await res.json()) as {
           status?: string;
           receiving?: { txHash?: string };
-          error?: string;
         };
         if (cancelled) return;
         if (!res.ok) {
@@ -203,11 +286,24 @@ export function TxReviewCard({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [status, txHash, fromChain, toChain, bridgeTool]);
+  }, [status, txHash, fromChain, toChain, bridgeTool, legs.length]);
+
+  function resolveAddress(
+    walletId: string,
+    confirmedWallets?: Array<{ id: string; address: string }>,
+  ): string {
+    const fromConfirm = confirmedWallets?.find((w) => w.id === walletId);
+    if (fromConfirm) return fromConfirm.address;
+    const fromReview = review.wallets?.[walletId]?.address;
+    if (fromReview) return fromReview;
+    if (walletId === review.wallet.id) return review.wallet.address;
+    throw new Error(`wallet_address_missing:${walletId}`);
+  }
 
   async function onConfirm() {
     setError(null);
     setStatus("confirming");
+    setStepNotes([]);
     try {
       const res = await fetch(`/api/plans/${review.planId}/confirm`, {
         method: "POST",
@@ -222,44 +318,81 @@ export function TxReviewCard({
         throw new Error(data.error ?? "Confirm failed");
       }
 
-      setStatus("signing");
-      const unsignedTx =
-        data.unsignedTx ??
-        utx ??
-        (q.data
-          ? {
-              to: q.to,
-              data: q.data,
-              value: q.value,
-              chainId: q.chainId,
-            }
-          : undefined);
-      const walletAddress = data.walletAddress ?? review.wallet.address;
-      const result = await executeLifiAfterConfirm({
-        lifiStep: data.lifiStep ?? review.plan.lifiStep,
-        unsignedTx,
-        walletAddress,
-        handleSendTransaction: handleSendTransaction as never,
-        signTransaction: signTransaction as never,
-        walletAccount: findWalletAccount(wallets ?? [], walletAddress),
-        solanaRpcUrl: SOLANA_RPC_URL,
-      });
+      const confirmedLegs: PlanStepExecution[] =
+        data.plan?.stepExecutions?.length > 0
+          ? data.plan.stepExecutions
+          : legs;
+      const confirmedWallets = data.wallets as
+        | Array<{ id: string; address: string }>
+        | undefined;
 
-      const hash = result.txHash;
-      const url = hash ? explorerUrlForTx(fromChain, hash) : undefined;
-      if (hash) setTxHash(hash);
-      if (url) setExplorerUrl(url);
+      let firstHash: string | undefined;
+      let firstExplorer: string | undefined;
+
+      for (let i = 0; i < confirmedLegs.length; i++) {
+        const leg = confirmedLegs[i]!;
+        setActiveStep(i);
+        setStatus("signing");
+        setStepNotes((prev) => [
+          ...prev,
+          `Signing step ${i + 1}/${confirmedLegs.length}: ${leg.label}`,
+        ]);
+
+        const walletAddress = resolveAddress(leg.walletId, confirmedWallets);
+        const result = await executeLifiAfterConfirm({
+          lifiStep: leg.lifiStep,
+          unsignedTx: leg.unsignedTx,
+          walletAddress,
+          handleSendTransaction: handleSendTransaction as never,
+          signTransaction: signTransaction as never,
+          walletAccount: findWalletAccount(wallets ?? [], walletAddress),
+          solanaRpcUrl: SOLANA_RPC_URL,
+        });
+
+        if (i === 0) {
+          firstHash = result.txHash;
+          firstExplorer = result.txHash
+            ? explorerUrlForTx(leg.unsignedTx.chainId, result.txHash)
+            : undefined;
+          if (firstHash) setTxHash(firstHash);
+          if (firstExplorer) setExplorerUrl(firstExplorer);
+        }
+
+        if (leg.waitForLifi) {
+          if (!result.txHash) {
+            throw new Error(
+              "Bridge source tx hash missing — cannot wait for LI.FI before lend.",
+            );
+          }
+          setStatus("waiting_bridge");
+          setLifiStatus("PENDING");
+          const ok = await waitForLifiDone({
+            txHash: result.txHash,
+            fromChain: leg.unsignedTx.chainId,
+            toChain: leg.unsignedTx.toChainId ?? toChain,
+            bridgeTool: leg.unsignedTx.tool ?? bridgeTool,
+            onStatus: (st, receiving) => {
+              setLifiStatus(st);
+              if (receiving) setReceivingTxHash(receiving);
+            },
+          });
+          if (!ok) {
+            throw new Error("Bridge did not complete — lend steps aborted.");
+          }
+          setStepNotes((prev) => [...prev, "Bridge settled — continuing."]);
+        }
+      }
 
       setStatus("done");
       onOutcome?.({
         status: "approved",
         planId: review.planId,
-        txHash: hash,
-        explorerUrl: url,
+        txHash: firstHash,
+        explorerUrl: firstExplorer,
         agentPayload: encodeTransferSubmitted({
           planId: review.planId,
-          txHash: hash,
-          explorerUrl: url,
+          txHash: firstHash,
+          explorerUrl: firstExplorer,
           fromChainId: fromChain,
           toChainId: toChain,
           route: routeLabel,
@@ -310,7 +443,7 @@ export function TxReviewCard({
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-zinc-100">
           {status === "done"
-            ? "Transfer submitted"
+            ? "Plan submitted"
             : status === "rejected"
               ? "Transfer rejected"
               : "Transaction review"}
@@ -326,9 +459,33 @@ export function TxReviewCard({
         )}
       </div>
       <p className="text-sm text-zinc-200">{routeLabel}</p>
+
+      {legs.length > 1 && (
+        <ol className="space-y-1.5 rounded-lg border border-zinc-800/80 bg-black/30 px-3 py-2">
+          {legs.map((leg, i) => (
+            <li
+              key={`${leg.stepIndex}-${leg.kind}`}
+              className={
+                i === activeStep && busy
+                  ? "text-xs text-sky-300"
+                  : "text-xs text-zinc-400"
+              }
+            >
+              <span className="font-mono text-zinc-600">{i + 1}.</span>{" "}
+              <span className="uppercase tracking-wide text-zinc-500">
+                {leg.kind}
+              </span>{" "}
+              {leg.label}
+            </li>
+          ))}
+        </ol>
+      )}
+
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs font-mono">
-        <dt className="text-zinc-500">Wallet</dt>
+        <dt className="text-zinc-500">Primary wallet</dt>
         <dd className="text-zinc-300 break-all">{review.wallet.address}</dd>
+        <dt className="text-zinc-500">Steps</dt>
+        <dd className="text-zinc-300">{legs.length}</dd>
         <dt className="text-zinc-500">Route</dt>
         <dd className="text-zinc-300">
           {cross ? `${fromChain} → ${toChain}` : String(fromChain)}
@@ -349,7 +506,7 @@ export function TxReviewCard({
             <dd className="text-zinc-300">{review.plan.expiresAt}</dd>
           </>
         )}
-        {status === "done" && (
+        {(status === "done" || status === "waiting_bridge") && (
           <>
             <dt className="text-zinc-500">Source tx</dt>
             <dd className="text-zinc-300 break-all">{txHash ?? "—"}</dd>
@@ -364,9 +521,10 @@ export function TxReviewCard({
               }
             >
               <span className="inline-flex items-center gap-1.5">
-                {lifiWaiting && status === "done" && (
-                  <Loader2 className="size-3 animate-spin" />
-                )}
+                {lifiWaiting &&
+                  (status === "done" || status === "waiting_bridge") && (
+                    <Loader2 className="size-3 animate-spin" />
+                  )}
                 {labelForLifiStatus(lifiStatus)}
               </span>
             </dd>
@@ -385,6 +543,14 @@ export function TxReviewCard({
           </>
         )}
       </dl>
+
+      {stepNotes.length > 0 && (
+        <ul className="space-y-0.5 text-[11px] text-zinc-500">
+          {stepNotes.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
@@ -412,10 +578,14 @@ export function TxReviewCard({
               <Loader2 className="size-3.5 animate-spin" />
             )}
             {status === "signing"
-              ? "Sign in wallet…"
-              : status === "confirming"
-                ? "Confirming…"
-                : "Confirm & sign"}
+              ? `Sign step ${activeStep + 1}…`
+              : status === "waiting_bridge"
+                ? "Waiting for bridge…"
+                : status === "confirming"
+                  ? "Confirming…"
+                  : legs.length > 1
+                    ? "Confirm & sign all steps"
+                    : "Confirm & sign"}
           </button>
           <button
             type="button"
