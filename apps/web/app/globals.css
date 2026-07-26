@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --muted: #a1a1aa;
+  --muted-fg: #71717a;
+  --panel: #0c0c0e;
+  --sidebar: #0a0a0b;
+  --border: #27272a;
+  --accent: #fafafa;
+  --accent-fg: #09090b;
+  --bubble-user: #18181b;
+  --bubble-assistant: transparent;
+  --ring: #3f3f46;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-panel: var(--panel);
+  --color-sidebar: var(--sidebar);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Soft scrollbar like vercel/chatbot */
+.cipher-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.cipher-scroll::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 999px;
+}
+.cipher-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -26,7 +26,13 @@ Working decisions from design review (2026-07-25). Spec updated: `docs/superpowe
 - [ ] **Phase 2 plan** — VenueAccount (HL + Polymarket) + venue secrets
 - [ ] **Phase 3 plan** — Jupiter / Kalshi-via-Jupiter + bridge multi-leg
 - [ ] **Phase 4 plan** — paymaster/relayer + yield execute + recovery tooling
-- [ ] **Execute Phase 1** (subagent-driven or inline)
+- [x] **Execute Phase 1 scaffold** — monorepo, packages, chat/dashboard, tool agent, tests + web build green (branch `feat/cipher-phase1`)
+- [x] **Wire live env** — OpenRouter + Zerion + Tavily + 0x (+ Turnkey) in `.env.local`
+- [x] **Local Cipher Supabase** via CLI on ports 5442x (not other apps’ stacks)
+- [x] **Persist plans/wallets to Supabase** when env set (`packages/agent` `store.ts`); memory fallback otherwise
+- [x] **Phase 1 demos 1–3 wiring** — agent uses auth user wallets; portfolio ownership check; research citations UI; confirm-gated swap (`POST /api/plans/:id/confirm` + Turnkey sign)
+- [ ] **Manual smoke** — login → portfolio chat≡dashboard → research cites → swap review Confirm & sign
+- [ ] **Add remaining API keys** to `apps/web/.env.local` as needed: Alchemy / paymaster (Phase 4)
 
 ## Demo sequencing (guidance from reviews — not locked)
 

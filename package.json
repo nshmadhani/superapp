@@ -1,0 +1,24 @@
+{
+  "name": "cipher",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@walletconnect/core": "2.23.10",
+      "@walletconnect/sign-client": "2.23.10",
+      "@walletconnect/types": "2.23.10",
+      "@walletconnect/utils": "2.23.10",
+      "@walletconnect/logger": "3.0.2"
+    }
+  }
+}
