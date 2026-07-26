@@ -9,6 +9,7 @@ import {
   CitationsCard,
   ClarificationCard,
   PortfolioCard,
+  SpawnAgentCard,
   TransferSubmittedCard,
 } from "./cards";
 import { MessageActions } from "./message-actions";
@@ -18,6 +19,7 @@ import {
   extractClarifications,
   extractPlanReviews,
   extractPortfolios,
+  extractSpawnedAgents,
   textFromParts,
 } from "./tool-extractors";
 import { parseTransferSubmitted } from "@/lib/transfer-submitted";
@@ -42,6 +44,7 @@ export function ChatMessage({
   const citations = extractCitations(message.parts);
   const portfolios = extractPortfolios(message.parts);
   const clarifications = extractClarifications(message.parts);
+  const spawned = extractSpawnedAgents(message.parts);
   const text = textFromParts(message.parts);
   const transferSubmitted = parseTransferSubmitted(text);
   const showAgent =
@@ -106,6 +109,9 @@ export function ChatMessage({
           review={r}
           onOutcome={(outcome) => onTxOutcome?.(outcome)}
         />
+      ))}
+      {spawned.map((s) => (
+        <SpawnAgentCard key={s.runId} run={s} />
       ))}
 
       {(text || onRegenerate) && (

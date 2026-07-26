@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   transpilePackages: [
     "@cipher/agent",
+    "@cipher/agent-jobs",
     "@cipher/core",
     "@cipher/db",
     "@cipher/zerion",
@@ -12,7 +13,7 @@ const nextConfig: NextConfig = {
     "@cipher/turnkey",
     "@cipher/rpc",
   ],
-  serverExternalPackages: ["@turnkey/sdk-server"],
+  serverExternalPackages: ["@turnkey/sdk-server", "@e2b/code-interpreter"],
 };
 
 export default nextConfig;

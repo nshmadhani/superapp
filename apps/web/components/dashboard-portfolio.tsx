@@ -54,9 +54,39 @@ type SingleSnap = {
 
 const OVERVIEW = "__overview__";
 
+type GroupBy = "wallet" | "chain" | "asset";
+
 function usd(n: number | null | undefined) {
   if (n == null) return "—";
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function groupPositions(
+  positions: Position[],
+  mode: GroupBy,
+): Array<{ key: string; label: string; valueUsd: number; count: number }> {
+  const map = new Map<string, { label: string; valueUsd: number; count: number }>();
+  for (const p of positions) {
+    let key: string;
+    let label: string;
+    if (mode === "chain") {
+      key = p.chainId || "unknown";
+      label = key;
+    } else if (mode === "asset") {
+      key = p.symbol || p.name || "unknown";
+      label = `${p.symbol}${p.name ? ` · ${p.name}` : ""}`;
+    } else {
+      key = p.walletAddress || p.walletId || "wallet";
+      label = p.walletLabel || key;
+    }
+    const prev = map.get(key) ?? { label, valueUsd: 0, count: 0 };
+    prev.valueUsd += p.valueUsd ?? 0;
+    prev.count += 1;
+    map.set(key, prev);
+  }
+  return [...map.entries()]
+    .map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => b.valueUsd - a.valueUsd);
 }
 
 export function DashboardPortfolio() {
@@ -66,6 +96,8 @@ export function DashboardPortfolio() {
   const [snap, setSnap] = useState<SingleSnap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [groupBy, setGroupBy] = useState<GroupBy>("wallet");
+  const [drillKey, setDrillKey] = useState<string | null>(null);
 
   const loadWallets = useCallback(async () => {
     const res = await fetch("/api/wallets");
@@ -151,6 +183,21 @@ export function DashboardPortfolio() {
   const asOf =
     selected === OVERVIEW ? overview?.asOf : snap?.asOf;
 
+  const groups = useMemo(
+    () => groupPositions(positions, groupBy),
+    [positions, groupBy],
+  );
+
+  const drilled = useMemo(() => {
+    if (!drillKey) return positions;
+    return positions.filter((p) => {
+      if (groupBy === "chain") return (p.chainId || "unknown") === drillKey;
+      if (groupBy === "asset")
+        return (p.symbol || p.name || "unknown") === drillKey;
+      return (p.walletAddress || p.walletId || "wallet") === drillKey;
+    });
+  }, [positions, drillKey, groupBy]);
+
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8">
       <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-5 space-y-4">
@@ -160,24 +207,44 @@ export function DashboardPortfolio() {
               Dashboard
             </h1>
             <p className="text-sm text-neutral-500">
-              Balances across your Cipher and connected wallets.
+              Where your money sits — group by wallet, chain, or asset.
             </p>
           </div>
-          <label className="text-sm text-neutral-400">
-            <span className="mr-2">View</span>
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              className="rounded-md border border-neutral-800 bg-black px-2 py-1.5 text-white"
-            >
-              <option value={OVERVIEW}>Overview · all wallets</option>
-              {selectOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="text-sm text-neutral-400">
+              <span className="mr-2">View</span>
+              <select
+                value={selected}
+                onChange={(e) => {
+                  setSelected(e.target.value);
+                  setDrillKey(null);
+                }}
+                className="rounded-md border border-neutral-800 bg-black px-2 py-1.5 text-white"
+              >
+                <option value={OVERVIEW}>Overview · all wallets</option>
+                {selectOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm text-neutral-400">
+              <span className="mr-2">Group</span>
+              <select
+                value={groupBy}
+                onChange={(e) => {
+                  setGroupBy(e.target.value as GroupBy);
+                  setDrillKey(null);
+                }}
+                className="rounded-md border border-neutral-800 bg-black px-2 py-1.5 text-white"
+              >
+                <option value="wallet">Wallet</option>
+                <option value="chain">Chain</option>
+                <option value="asset">Asset</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         {loading && <p className="text-sm text-neutral-500">Loading…</p>}
@@ -192,31 +259,50 @@ export function DashboardPortfolio() {
               <p className="text-3xl font-semibold text-white">{usd(total)}</p>
             </div>
 
-            {selected === OVERVIEW && overview && overview.wallets.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {overview.wallets.map((w) => (
-                  <button
-                    key={w.walletId}
-                    type="button"
-                    onClick={() => setSelected(w.address)}
-                    className="rounded-lg border border-neutral-800 bg-black/40 px-3 py-3 text-left transition-colors hover:border-neutral-600"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-white">
-                        {walletDisplayName(w)}
-                      </span>
-                      <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
-                        {w.chainFamily === "solana" ? "SOL" : "EVM"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-lg font-semibold text-neutral-100">
-                      {usd(w.totalValueUsd)}
-                    </p>
-                    {w.error && (
-                      <p className="mt-1 text-xs text-red-400">{w.error}</p>
-                    )}
-                  </button>
-                ))}
+            {groups.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+                    Grouped by {groupBy}
+                  </p>
+                  {drillKey && (
+                    <button
+                      type="button"
+                      onClick={() => setDrillKey(null)}
+                      className="text-xs text-sky-400 hover:underline"
+                    >
+                      Clear drill-down
+                    </button>
+                  )}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {groups.map((g) => (
+                    <button
+                      key={g.key}
+                      type="button"
+                      onClick={() =>
+                        setDrillKey((prev) => (prev === g.key ? null : g.key))
+                      }
+                      className={
+                        drillKey === g.key
+                          ? "rounded-lg border border-sky-700 bg-sky-950/30 px-3 py-3 text-left"
+                          : "rounded-lg border border-neutral-800 bg-black/40 px-3 py-3 text-left transition-colors hover:border-neutral-600"
+                      }
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-white">
+                          {g.label}
+                        </span>
+                        <span className="shrink-0 text-[10px] uppercase tracking-wide text-neutral-500">
+                          {g.count} pos
+                        </span>
+                      </div>
+                      <p className="mt-1 text-lg font-semibold text-neutral-100">
+                        {usd(g.valueUsd)}
+                      </p>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -233,7 +319,7 @@ export function DashboardPortfolio() {
                 </tr>
               </thead>
               <tbody>
-                {positions.length === 0 ? (
+                {drilled.length === 0 ? (
                   <tr>
                     <td
                       colSpan={selected === OVERVIEW ? 5 : 4}
@@ -243,7 +329,7 @@ export function DashboardPortfolio() {
                     </td>
                   </tr>
                 ) : (
-                  positions.map((p, i) => (
+                  drilled.map((p, i) => (
                     <tr
                       key={`${p.symbol}-${p.walletAddress ?? ""}-${i}`}
                       className="border-t border-neutral-800"

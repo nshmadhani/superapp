@@ -1,8 +1,34 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { Bot, ExternalLink } from "lucide-react";
 import { walletDisplayName } from "@/lib/wallet-display";
-import type { Clarification, PortfolioSnap, SearchHit } from "./tool-extractors";
+import type {
+  Clarification,
+  PortfolioSnap,
+  SearchHit,
+  SpawnedAgent,
+} from "./tool-extractors";
+
+export function SpawnAgentCard({ run }: { run: SpawnedAgent }) {
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2.5">
+      <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+        <Bot className="size-3.5" />
+        Autonomous agent
+      </p>
+      <p className="text-sm text-zinc-200">
+        {run.type.replace("_", " ")} · {run.status}
+      </p>
+      <Link
+        href={run.href}
+        className="mt-2 inline-flex text-xs text-sky-400 hover:underline"
+      >
+        Open in Agents →
+      </Link>
+    </div>
+  );
+}
 
 export function CitationsCard({ hits }: { hits: SearchHit[] }) {
   if (!hits.length) return null;

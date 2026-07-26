@@ -7,6 +7,7 @@ import { askUserTool } from "./ask-user";
 import { createPlanTool } from "./create-plan";
 import { simulatePlanTool } from "./simulate-plan";
 import { executePlanTool } from "./execute-plan";
+import { spawnAgentTool } from "./spawn-agent";
 
 export type AgentContext = {
   userId: string;
@@ -22,5 +23,6 @@ export function createCipherTools(ctx: AgentContext): Record<string, Tool> {
     create_plan: createPlanTool(ctx),
     simulate_plan: simulatePlanTool(),
     execute_plan: executePlanTool(ctx),
+    spawn_agent: spawnAgentTool(ctx),
   };
 }

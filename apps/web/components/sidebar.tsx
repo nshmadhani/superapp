@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
-import { LayoutDashboard, MessageSquare, Plus } from "lucide-react";
+import { Bot, LayoutDashboard, MessageSquare, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { onCipherAuthed, waitForCipherSession } from "@/lib/cipher-session";
 
@@ -75,7 +75,29 @@ export function Sidebar() {
         </button>
       </div>
 
-      <nav className="px-2 pb-2">
+      <nav className="space-y-0.5 px-2 pb-2">
+        <Link
+          href="/"
+          className={
+            pathname === "/" || pathname.startsWith("/c/")
+              ? "flex items-center gap-2 rounded-lg bg-zinc-800 px-2.5 py-2 text-sm text-zinc-50"
+              : "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+          }
+        >
+          <MessageSquare className="size-4" />
+          Chat
+        </Link>
+        <Link
+          href="/agents"
+          className={
+            pathname.startsWith("/agents")
+              ? "flex items-center gap-2 rounded-lg bg-zinc-800 px-2.5 py-2 text-sm text-zinc-50"
+              : "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+          }
+        >
+          <Bot className="size-4" />
+          Agents
+        </Link>
         <Link
           href="/dashboard"
           className={

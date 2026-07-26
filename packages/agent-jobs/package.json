@@ -1,5 +1,5 @@
 {
-  "name": "@cipher/agent",
+  "name": "@cipher/agent-jobs",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -11,15 +11,8 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@cipher/adapters": "workspace:*",
-    "@cipher/agent-jobs": "workspace:*",
-    "@cipher/core": "workspace:*",
-    "@cipher/db": "workspace:*",
-    "@cipher/defillama": "workspace:*",
     "@cipher/search": "workspace:*",
-    "@cipher/zerion": "workspace:*",
-    "@openrouter/ai-sdk-provider": "^1.5.4",
-    "ai": "^5.0.0",
+    "@e2b/code-interpreter": "^2.6.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

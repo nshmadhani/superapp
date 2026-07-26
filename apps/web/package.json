@@ -13,6 +13,7 @@
     "@ai-sdk/react": "^2.0.0",
     "@cipher/adapters": "workspace:^",
     "@cipher/agent": "workspace:*",
+    "@cipher/agent-jobs": "workspace:*",
     "@cipher/core": "workspace:*",
     "@cipher/db": "workspace:*",
     "@cipher/turnkey": "workspace:*",

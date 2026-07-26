@@ -1,4 +1,5 @@
 import {
+  Bot,
   CircleHelp,
   Landmark,
   List,
@@ -74,6 +75,13 @@ const TOOLS: Record<string, ToolMeta> = {
     verb: "Executing plan",
     description: "Submit the approved plan",
     Icon: List,
+  },
+  spawn_agent: {
+    id: "spawn_agent",
+    label: "Agents",
+    verb: "Spawning agent",
+    description: "Start a one-shot autonomous E2B job",
+    Icon: Bot,
   },
 };
 

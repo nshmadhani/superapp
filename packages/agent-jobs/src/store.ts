@@ -1,0 +1,83 @@
+import type { AgentRun, AgentStep, CreateAgentInput } from "./types";
+
+const runs = new Map<string, AgentRun>();
+
+function now() {
+  return new Date().toISOString();
+}
+
+export const agentRunStore = {
+  create(input: CreateAgentInput): AgentRun {
+    const ts = now();
+    const run: AgentRun = {
+      id: crypto.randomUUID(),
+      userId: input.userId,
+      type: input.type,
+      goal: input.goal,
+      policy: input.policy ?? {},
+      status: "queued",
+      steps: [],
+      artifact: null,
+      source: null,
+      createdAt: ts,
+      updatedAt: ts,
+    };
+    runs.set(run.id, run);
+    return structuredClone(run);
+  },
+
+  get(id: string): AgentRun | null {
+    const run = runs.get(id);
+    return run ? structuredClone(run) : null;
+  },
+
+  list(userId: string): AgentRun[] {
+    return [...runs.values()]
+      .filter((r) => r.userId === userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((r) => structuredClone(r));
+  },
+
+  update(
+    id: string,
+    patch: Partial<
+      Pick<
+        AgentRun,
+        | "status"
+        | "steps"
+        | "artifact"
+        | "source"
+        | "sandboxId"
+        | "error"
+        | "finishedAt"
+      >
+    >,
+  ): AgentRun | null {
+    const run = runs.get(id);
+    if (!run) return null;
+    Object.assign(run, patch, { updatedAt: now() });
+    return structuredClone(run);
+  },
+
+  appendStep(id: string, step: Omit<AgentStep, "at"> & { at?: string }): AgentRun | null {
+    const run = runs.get(id);
+    if (!run) return null;
+    run.steps = [...run.steps, { ...step, at: step.at ?? now() }];
+    run.updatedAt = now();
+    return structuredClone(run);
+  },
+
+  patchStep(
+    id: string,
+    stepId: string,
+    patch: Partial<Pick<AgentStep, "status" | "detail">>,
+  ): AgentRun | null {
+    const run = runs.get(id);
+    if (!run) return null;
+    run.steps = run.steps.map((s) =>
+      s.id === stepId ? { ...s, ...patch, at: now() } : s,
+    );
+    run.updatedAt = now();
+    return structuredClone(run);
+  },
+};
