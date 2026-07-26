@@ -6,7 +6,7 @@ import type { AgentContext } from "./index";
 export function listWalletsTool(ctx: AgentContext) {
   return tool({
     description:
-      "List wallets linked to the current user (embedded Turnkey or connected external). Each wallet has id, label (display name), address, and chainFamily (evm|solana).",
+      "List wallets linked to the current user (embedded Turnkey or connected external). Each wallet has id, label (display name), address, and chainFamily (evm|solana). Always call this before transfers. For bridges to an EVM chain (including HyperEVM), offer the user's existing EVM wallets as destination options — do not assume they need a new address.",
     inputSchema: z.object({}),
     execute: async () => {
       return { wallets: await store.listWallets(ctx.userId) };

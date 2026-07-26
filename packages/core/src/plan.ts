@@ -2,13 +2,17 @@ import { createHash } from "node:crypto";
 
 export type PlanStep =
   | {
-      type: "swap";
-      chainId: number;
+      type: "swap" | "bridge";
+      fromChainId: number;
+      toChainId: number;
       sellToken: string;
       buyToken: string;
       sellAmount: string;
       minBuyAmount: string;
       adapterId: string;
+      tool?: string;
+      /** @deprecated use fromChainId — kept for older plans */
+      chainId?: number;
     }
   | {
       type: "transfer";
@@ -27,6 +31,11 @@ export type PlanUnsignedTx = {
   chainId: number;
   minBuyAmount: string;
   displayRoute: string;
+  tool?: string;
+  toolName?: string;
+  toChainId?: number;
+  executionDurationSec?: number;
+  isCrossChain?: boolean;
 };
 
 export type Plan = {
@@ -36,8 +45,12 @@ export type Plan = {
   createdAt: string;
   expiresAt: string;
   summary?: string;
-  /** 0x quote payload for confirm → sign. Omitted from hashPlan. */
+  /** Source-chain tx + review fields. Omitted from hashPlan. */
   unsignedTx?: PlanUnsignedTx;
+  /** Serialized LiFi step for SDK execute / status. Omitted from hashPlan. */
+  lifiStep?: unknown;
+  /** Serialized LiFi route for executeRoute. Omitted from hashPlan. */
+  lifiRoute?: unknown;
 };
 
 export function hashPlan(plan: Plan): string {

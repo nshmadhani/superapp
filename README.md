@@ -7,20 +7,20 @@ AI crypto co-pilot — research and act through tools (no hardcoded flows).
 - pnpm monorepo + Turborepo
 - Next.js app (`apps/web`)
 - OpenRouter + Vercel AI SDK (tool-calling agent)
-- Zerion, DeFiLlama, Tavily, Alchemy, 0x, Turnkey
-- In-memory plan/wallet store for local Phase 1 (Supabase schema ready in `packages/db`)
+- Zerion, DeFiLlama, Tavily, LI.FI, Turnkey
+- Supabase for plans/wallets (memory fallback when unset)
 
 ## Setup
 
 ```bash
 pnpm install
-cp .env.example .env.local
+cp .env.example apps/web/.env.local
 # fill OPENROUTER_API_KEY (required for chat)
-# optional: ZERION_API_KEY, TAVILY_API_KEY, ZEROX_API_KEY, ALCHEMY_API_KEY, Turnkey keys
+# optional: ZERION_API_KEY, TAVILY_API_KEY, LIFI_API_KEY, Turnkey keys
 pnpm --filter @cipher/web dev
 ```
 
-Open [http://localhost:3000/chat](http://localhost:3000/chat).
+Open [http://localhost:3001](http://localhost:3001) (or your configured port).
 
 ## Scripts
 

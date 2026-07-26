@@ -24,10 +24,11 @@ Working decisions from design review (2026-07-25). Spec updated: `docs/superpowe
 - [ ] **Slippage / liquidity warn vs hard-block thresholds**
 - [x] **Phase 1 implementation plan** — `docs/superpowers/plans/2026-07-25-cipher-phase1.md`
 - [ ] **Phase 2 plan** — VenueAccount (HL + Polymarket) + venue secrets
-- [ ] **Phase 3 plan** — Jupiter / Kalshi-via-Jupiter + bridge multi-leg
+- [x] **LiFi adapter** — replace 0x primary path; same-chain + bridge via `@lifi/sdk` (confirm-gated)
+- [ ] **Phase 3 plan** — Kalshi-via-Jupiter refinements + multi-leg saga (bridges via LiFi)
 - [ ] **Phase 4 plan** — paymaster/relayer + yield execute + recovery tooling
 - [x] **Execute Phase 1 scaffold** — monorepo, packages, chat/dashboard, tool agent, tests + web build green (branch `feat/cipher-phase1`)
-- [x] **Wire live env** — OpenRouter + Zerion + Tavily + 0x (+ Turnkey) in `.env.local`
+- [x] **Wire live env** — OpenRouter + Zerion + Tavily + LiFi (+ Turnkey) in `.env.local`
 - [x] **Local Cipher Supabase** via CLI on ports 5442x (not other apps’ stacks)
 - [x] **Persist plans/wallets to Supabase** when env set (`packages/agent` `store.ts`); memory fallback otherwise
 - [x] **Phase 1 demos 1–3 wiring** — agent uses auth user wallets; portfolio ownership check; research citations UI; confirm-gated swap (`POST /api/plans/:id/confirm` + Turnkey sign)

@@ -4,6 +4,7 @@ export {
   createConfirm,
   approveConfirm,
   consumeConfirm,
+  rejectConfirm,
   getPlan,
 } from "./plans";
 export {

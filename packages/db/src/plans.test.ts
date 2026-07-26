@@ -9,12 +9,13 @@ describe("plan persistence contract", () => {
       steps: [
         {
           type: "swap",
-          chainId: 8453,
+          fromChainId: 8453,
+          toChainId: 8453,
           sellToken: "0xusd",
           buyToken: "0xeth",
           sellAmount: "1000",
           minBuyAmount: "1",
-          adapterId: "evm-swap",
+          adapterId: "lifi",
         },
       ],
       createdAt: new Date().toISOString(),

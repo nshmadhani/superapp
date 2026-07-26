@@ -64,7 +64,9 @@ export async function approveConfirm(
 ): Promise<{
   planId: string;
   planHash: string;
-  unsignedTx: PlanUnsignedTx;
+  unsignedTx?: PlanUnsignedTx;
+  lifiStep?: unknown;
+  lifiRoute?: unknown;
   walletAddress: string;
   walletId: string;
 }> {
@@ -105,8 +107,9 @@ export async function approveConfirm(
     .eq("id", opts.planId);
 
   const plan = planRow.plan_json as Plan;
-  const unsignedTx = plan.unsignedTx;
-  if (!unsignedTx) throw new Error("plan_missing_unsigned_tx");
+  if (!plan.unsignedTx && !plan.lifiStep) {
+    throw new Error("plan_missing_quote");
+  }
 
   const { data: wallet, error: wErr } = await db
     .from("wallets")
@@ -118,7 +121,9 @@ export async function approveConfirm(
   return {
     planId: opts.planId,
     planHash: opts.planHash,
-    unsignedTx,
+    unsignedTx: plan.unsignedTx,
+    lifiStep: plan.lifiStep,
+    lifiRoute: plan.lifiRoute,
     walletAddress: wallet.address as string,
     walletId: wallet.id as string,
   };
@@ -153,4 +158,52 @@ export async function consumeConfirm(
     .eq("id", data.plan_id);
 
   return data.plan_id as string;
+}
+
+/**
+ * UI Reject: invalidate confirm so it cannot be approved later.
+ */
+export async function rejectConfirm(
+  db: SupabaseClient,
+  opts: {
+    planId: string;
+    confirmId: string;
+    planHash: string;
+    userId: string;
+  },
+): Promise<{ planId: string }> {
+  const { data: planRow, error: planErr } = await db
+    .from("plans")
+    .select("id, user_id, plan_hash")
+    .eq("id", opts.planId)
+    .eq("user_id", opts.userId)
+    .single();
+  if (planErr || !planRow) throw new Error("plan_not_found");
+  if (planRow.plan_hash !== opts.planHash) throw new Error("Plan hash mismatch");
+
+  const { data: confirm, error: confErr } = await db
+    .from("plan_confirms")
+    .select("*")
+    .eq("confirm_id", opts.confirmId)
+    .eq("plan_id", opts.planId)
+    .is("consumed_at", null)
+    .single();
+  if (confErr || !confirm) throw new Error("Invalid or expired confirmId");
+  if (confirm.plan_hash !== opts.planHash) throw new Error("Plan hash mismatch");
+  if (confirm.approved_at) {
+    throw new Error("Confirm already approved");
+  }
+
+  const { error: updateError } = await db
+    .from("plan_confirms")
+    .update({ consumed_at: new Date().toISOString() })
+    .eq("confirm_id", opts.confirmId);
+  if (updateError) throw updateError;
+
+  await db
+    .from("plans")
+    .update({ status: "rejected" })
+    .eq("id", opts.planId);
+
+  return { planId: opts.planId };
 }

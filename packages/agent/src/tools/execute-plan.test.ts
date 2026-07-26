@@ -10,12 +10,13 @@ function samplePlan(walletId: string): Plan {
     steps: [
       {
         type: "swap",
-        chainId: 8453,
+        fromChainId: 8453,
+        toChainId: 8453,
         sellToken: "0xa",
         buyToken: "0xb",
         sellAmount: "1",
         minBuyAmount: "1",
-        adapterId: "evm-swap",
+        adapterId: "lifi",
       },
     ],
     createdAt: new Date().toISOString(),
@@ -82,7 +83,7 @@ describe("execute_plan confirm gate", () => {
       planHash,
       userId,
     );
-    expect(approved.unsignedTx.to).toBe("0xrouter");
+    expect(approved.unsignedTx?.to).toBe("0xrouter");
     expect(memoryStore.consumeConfirm(confirmId, planHash)).toBe(planId);
     expect(() => memoryStore.consumeConfirm(confirmId, planHash)).toThrow();
   });

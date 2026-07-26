@@ -1,9 +1,10 @@
 "use client";
 
 import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
-import { ArrowUp, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { ChatComposer } from "@/components/chat/chat-composer";
+import { ChatEmptyState } from "@/components/chat/empty-state";
 import { waitForCipherSession } from "@/lib/cipher-session";
 
 export default function HomePage() {
@@ -63,52 +64,22 @@ export default function HomePage() {
   }
 
   return (
-    <div className="relative mx-auto flex h-full w-full max-w-3xl flex-col">
-      <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 pb-36 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
-          Cipher
-        </h1>
-        <p className="max-w-sm text-sm text-zinc-500">
-          Ask about portfolios, research markets, or plan a trade.
-        </p>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+    <div className="relative flex h-full w-full flex-col">
+      <div className="mx-auto flex w-full max-w-[57.6rem] flex-1 flex-col items-center justify-center px-4 pb-28">
+        <div className="mx-auto w-[90%]">
+        <ChatEmptyState onSuggest={(t) => void startChat(t)} denser />
+        {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        </div>
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-zinc-950 via-zinc-950/95 to-transparent px-4 pb-4 pt-10">
-        <form
-          className="pointer-events-auto mx-auto flex max-w-3xl items-end gap-2 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-2 shadow-lg shadow-black/40 backdrop-blur"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void startChat(input);
-          }}
-        >
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void startChat(input);
-              }
-            }}
-            rows={1}
-            placeholder="Message Cipher…"
-            className="max-h-40 min-h-[44px] flex-1 resize-none bg-transparent px-3 py-2.5 text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
-          />
-          <button
-            type="submit"
-            disabled={starting || !input.trim()}
-            aria-label="Send"
-            className="mb-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-950 disabled:opacity-30"
-          >
-            {starting ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <ArrowUp className="size-4" />
-            )}
-          </button>
-        </form>
-      </div>
+      <ChatComposer
+        value={input}
+        onChange={setInput}
+        onSubmit={(t) => void startChat(t)}
+        busy={starting}
+        error={null}
+        footer={null}
+      />
     </div>
   );
 }

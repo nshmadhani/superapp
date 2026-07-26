@@ -5,18 +5,28 @@ import { convertToModelMessages, type UIMessage } from "ai";
 
 export const maxDuration = 60;
 
-function lastUserText(messages: UIMessage[]): string | null {
+function textFromParts(parts: UIMessage["parts"] | undefined): string {
+  return (parts ?? [])
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("\n")
+    .trim();
+}
+
+function lastUserMessage(messages: UIMessage[]): UIMessage | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
-    if (m?.role !== "user") continue;
-    const text = (m.parts ?? [])
-      .filter((p): p is { type: "text"; text: string } => p.type === "text")
-      .map((p) => p.text)
-      .join("\n")
-      .trim();
-    return text || null;
+    if (m?.role === "user") return m;
   }
   return null;
+}
+
+function contentPayload(message: UIMessage) {
+  return {
+    text: textFromParts(message.parts),
+    parts: message.parts ?? [],
+    id: message.id,
+  };
 }
 
 export async function POST(req: Request) {
@@ -38,8 +48,9 @@ export async function POST(req: Request) {
         return Response.json({ error: "chat_not_found" }, { status: 404 });
       }
 
-      const lastText = lastUserText(messages);
-      if (lastText) {
+      const lastUser = lastUserMessage(messages);
+      const lastText = lastUser ? textFromParts(lastUser.parts) : null;
+      if (lastUser && lastText) {
         const { data: latest } = await db
           .from("chat_messages")
           .select("role, content")
@@ -47,6 +58,13 @@ export async function POST(req: Request) {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
+        const latestId =
+          latest?.role === "user" &&
+          latest.content &&
+          typeof latest.content === "object" &&
+          "id" in latest.content
+            ? String((latest.content as { id?: string }).id ?? "")
+            : null;
         const latestText =
           latest?.role === "user" &&
           latest.content &&
@@ -54,11 +72,13 @@ export async function POST(req: Request) {
           "text" in latest.content
             ? String((latest.content as { text?: string }).text ?? "")
             : null;
-        if (latestText !== lastText) {
+        const alreadyStored =
+          (latestId && latestId === lastUser.id) || latestText === lastText;
+        if (!alreadyStored) {
           await db.from("chat_messages").insert({
             chat_id: chatId,
             role: "user",
-            content: { text: lastText },
+            content: contentPayload(lastUser),
           });
         }
         const { data: meta } = await db
@@ -87,15 +107,19 @@ export async function POST(req: Request) {
     const modelMessages = await convertToModelMessages(messages);
     const result = agent.stream(modelMessages);
 
-    if (chatId) {
-      void result.text.then(async (text) => {
-        if (!text) return;
+    return result.toUIMessageStreamResponse({
+      originalMessages: messages,
+      generateMessageId: () => crypto.randomUUID(),
+      onFinish: async ({ responseMessage, isAborted }) => {
+        if (!chatId || isAborted) return;
+        const text = textFromParts(responseMessage.parts);
+        if (!text && !(responseMessage.parts?.length > 0)) return;
         try {
           const db = createDb();
           await db.from("chat_messages").insert({
             chat_id: chatId,
             role: "assistant",
-            content: { text },
+            content: contentPayload(responseMessage),
           });
           await db
             .from("chats")
@@ -104,10 +128,8 @@ export async function POST(req: Request) {
         } catch (e) {
           console.error("persist assistant message", e);
         }
-      });
-    }
-
-    return result.toUIMessageStreamResponse();
+      },
+    });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: "unauthorized" }, { status: 401 });

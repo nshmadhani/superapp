@@ -74,7 +74,9 @@ export const memoryStore = {
   ): {
     planId: string;
     planHash: string;
-    unsignedTx: PlanUnsignedTx;
+    unsignedTx?: PlanUnsignedTx;
+    lifiStep?: unknown;
+    lifiRoute?: unknown;
     walletAddress: string;
     walletId: string;
   } {
@@ -94,8 +96,9 @@ export const memoryStore = {
     if (row.planHash !== planHash) throw new Error("Plan hash mismatch");
     row.approvedAt = row.approvedAt ?? new Date().toISOString();
 
-    const unsignedTx = stored.plan.unsignedTx;
-    if (!unsignedTx) throw new Error("plan_missing_unsigned_tx");
+    if (!stored.plan.unsignedTx && !stored.plan.lifiStep) {
+      throw new Error("plan_missing_quote");
+    }
 
     const wallets = walletsByUser.get(userId) ?? [];
     const wallet = wallets.find((w) => w.id === stored.plan.walletId);
@@ -104,7 +107,9 @@ export const memoryStore = {
     return {
       planId,
       planHash,
-      unsignedTx,
+      unsignedTx: stored.plan.unsignedTx,
+      lifiStep: stored.plan.lifiStep,
+      lifiRoute: stored.plan.lifiRoute,
       walletAddress: wallet.address,
       walletId: wallet.id,
     };
@@ -123,5 +128,23 @@ export const memoryStore = {
     if (!row.approvedAt) throw new Error("Confirm not approved in UI");
     row.consumedAt = new Date().toISOString();
     return row.planId;
+  },
+  rejectConfirm(
+    planId: string,
+    confirmId: string,
+    planHash: string,
+    userId: string,
+  ): { planId: string } {
+    const stored = plans.get(planId);
+    if (!stored || stored.userId !== userId) throw new Error("plan_not_found");
+    if (stored.planHash !== planHash) throw new Error("Plan hash mismatch");
+    const row = confirms.get(confirmId);
+    if (!row || row.consumedAt || row.planId !== planId) {
+      throw new Error("Invalid or expired confirmId");
+    }
+    if (row.planHash !== planHash) throw new Error("Plan hash mismatch");
+    if (row.approvedAt) throw new Error("Confirm already approved");
+    row.consumedAt = new Date().toISOString();
+    return { planId };
   },
 };

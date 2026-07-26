@@ -9,12 +9,13 @@ describe("hashPlan", () => {
       steps: [
         {
           type: "swap",
-          chainId: 8453,
+          fromChainId: 8453,
+          toChainId: 8453,
           sellToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
           buyToken: "0x4200000000000000000000000000000000000006",
           sellAmount: "1000000",
           minBuyAmount: "1",
-          adapterId: "evm-swap",
+          adapterId: "lifi",
         },
       ],
       createdAt: "2026-07-25T00:00:00.000Z",

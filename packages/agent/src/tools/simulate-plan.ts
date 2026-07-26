@@ -5,7 +5,7 @@ import { store } from "../store";
 export function simulatePlanTool() {
   return tool({
     description:
-      "Re-check a stored plan before confirm: expiry, swap step sanity, and liquidity/slippage warnings from the stored quote.",
+      "Re-check a stored plan before confirm: expiry, swap/bridge step sanity, and liquidity warnings from the stored LiFi quote.",
     inputSchema: z.object({
       planId: z.string(),
     }),
@@ -21,19 +21,20 @@ export function simulatePlanTool() {
         };
       }
       const step = stored.plan.steps[0];
-      if (!step || step.type !== "swap") {
+      if (!step || (step.type !== "swap" && step.type !== "bridge")) {
         return {
           kind: "estimated" as const,
           ok: false,
-          warnings: ["Only swap plans are supported in Phase 1."],
+          warnings: ["Only swap/bridge plans are supported."],
         };
       }
 
       const warnings: string[] = [];
       const tx = stored.plan.unsignedTx;
-      if (!tx) {
-        warnings.push("Missing stored quote calldata — recreate the plan.");
-      } else {
+      if (!stored.plan.lifiStep && !tx?.data) {
+        warnings.push("Missing LiFi quote — recreate the plan.");
+      }
+      if (tx) {
         try {
           const minOut = BigInt(tx.minBuyAmount || "0");
           if (minOut === BigInt(0)) {
@@ -41,24 +42,17 @@ export function simulatePlanTool() {
               "Min buy amount is 0 — liquidity may be thin; review carefully.",
             );
           }
-          const sell = BigInt(step.sellAmount || "0");
-          if (
-            sell > BigInt(0) &&
-            minOut > BigInt(0) &&
-            minOut * BigInt(100) < sell
-          ) {
-            // Heuristic when both are raw units of different tokens — soft warn only
-            warnings.push(
-              "Quoted min out looks small relative to sell amount — check slippage and token decimals.",
-            );
-          }
         } catch {
           warnings.push("Could not parse quote amounts for liquidity check.");
         }
+        if (tx.isCrossChain) {
+          warnings.push(
+            "Cross-chain bridge: funds arrive on the destination after bridge finality; track status after signing.",
+          );
+        }
       }
 
-      const msLeft =
-        new Date(stored.plan.expiresAt).getTime() - Date.now();
+      const msLeft = new Date(stored.plan.expiresAt).getTime() - Date.now();
       if (msLeft < 2 * 60_000) {
         warnings.push("Quote expires in under 2 minutes.");
       }
@@ -71,7 +65,9 @@ export function simulatePlanTool() {
         summary: stored.plan.summary,
         displayRoute: tx?.displayRoute,
         minBuyAmount: tx?.minBuyAmount,
-        chainId: tx?.chainId ?? step.chainId,
+        fromChainId: step.fromChainId ?? step.chainId,
+        toChainId: step.toChainId,
+        tool: tx?.toolName ?? step.tool,
       };
     },
   });

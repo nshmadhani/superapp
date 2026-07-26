@@ -19,7 +19,7 @@ export async function POST(
       );
     }
 
-    const result = await store.approveConfirm(
+    const result = await store.rejectConfirm(
       planId,
       body.confirmId,
       body.planHash,
@@ -29,20 +29,14 @@ export async function POST(
     return Response.json({
       ok: true,
       planId: result.planId,
-      planHash: result.planHash,
-      walletId: result.walletId,
-      walletAddress: result.walletAddress,
-      unsignedTx: result.unsignedTx,
-      lifiStep: result.lifiStep,
-      lifiRoute: result.lifiRoute,
-      message: "Plan confirmed. Execute via LI.FI / Turnkey.",
+      message: "Plan rejected.",
     });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
     return Response.json(
-      { error: err instanceof Error ? err.message : "confirm_failed" },
+      { error: err instanceof Error ? err.message : "reject_failed" },
       { status: 400 },
     );
   }

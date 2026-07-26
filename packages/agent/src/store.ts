@@ -11,6 +11,7 @@ import {
   deleteWallet,
   deleteWalletByAddress,
   consumeConfirm,
+  rejectConfirm,
   getPlan,
 } from "@cipher/db";
 import {
@@ -189,6 +190,19 @@ export const store = {
     }
     const db = createDb();
     return consumeConfirm(db, confirmId, expectedHash);
+  },
+
+  async rejectConfirm(
+    planId: string,
+    confirmId: string,
+    planHash: string,
+    userId: string,
+  ) {
+    if (!hasSupabase()) {
+      return memoryStore.rejectConfirm(planId, confirmId, planHash, userId);
+    }
+    const db = createDb();
+    return rejectConfirm(db, { planId, confirmId, planHash, userId });
   },
 
   hashPlan,
