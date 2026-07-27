@@ -28,6 +28,7 @@
     "@walletconnect/types": "2.23.10",
     "@walletconnect/utils": "2.23.10",
     "ai": "^5.0.0",
+    "lightweight-charts": "^5.2.0",
     "lucide-react": "^1.27.0",
     "next": "16.2.12",
     "react": "19.2.4",

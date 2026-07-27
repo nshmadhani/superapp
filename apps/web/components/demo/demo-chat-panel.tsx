@@ -29,6 +29,7 @@ import { DemoTaCard, type TaSnapshot } from "./demo-ta-card";
 import { PriceChart } from "./sparkline";
 import { getDemoChat } from "@/lib/demo/fixtures";
 import { useDemoPlayback } from "@/lib/demo/use-demo-playback";
+import { isTaLiveChat, TaLiveSession } from "./ta-live-session";
 
 function extractMultiStepPlans(parts: UIMessage["parts"]): MultiStepPlan[] {
   const out: MultiStepPlan[] = [];
@@ -180,6 +181,13 @@ function DemoMessage({
 }
 
 export function DemoChatPanel({ chatId }: { chatId: string }) {
+  if (isTaLiveChat(chatId)) {
+    return <TaLiveSession />;
+  }
+  return <FixtureChatPanel chatId={chatId} />;
+}
+
+function FixtureChatPanel({ chatId }: { chatId: string }) {
   const chat = getDemoChat(chatId);
   const { messages, busy, preferAgentOpen } = useDemoPlayback(chat);
   const [input, setInput] = useState("");

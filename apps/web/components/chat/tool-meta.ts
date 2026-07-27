@@ -56,9 +56,9 @@ const TOOLS: Record<string, ToolMeta> = {
   },
   analyze_technicals: {
     id: "analyze_technicals",
-    label: "Technical analysis",
-    verb: "Running technical analysis",
-    description: "Structure, S/R, momentum, volume, risk",
+    label: "Technicals",
+    verb: "Analyzing technicals",
+    description: "Structure, EMAs, RSI, S/R, volume",
     Icon: TrendingUp,
   },
   ask_user: {
