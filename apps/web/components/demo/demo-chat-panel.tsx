@@ -86,7 +86,7 @@ export function DemoChatPanel({ chatId }: { chatId: string }) {
   if (!chat) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-        Demo chat not found.
+        Chat not found.
       </div>
     );
   }
@@ -105,9 +105,6 @@ export function DemoChatPanel({ chatId }: { chatId: string }) {
             <DemoMessage key={m.id} message={m} />
           ))}
         </div>
-      </div>
-      <div className="border-t border-zinc-800 px-4 py-3 text-center text-xs text-zinc-600">
-        Walkthrough mode — conversations are preloaded for the demo.
       </div>
     </div>
   );

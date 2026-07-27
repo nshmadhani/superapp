@@ -13,8 +13,8 @@ export default function HomePage() {
             Cipher
           </h1>
           <p className="mt-2 max-w-md text-sm text-zinc-500">
-            YC walkthrough — open a chat, agent, or the dashboard from the
-            sidebar. Everything is preloaded so you can just walk through it.
+            Research, move money, and run agents across your wallets — all in one
+            place.
           </p>
         </div>
 

@@ -10,7 +10,9 @@ export function TopBar() {
         <span className="font-mono text-xs">0xA1b2…abcd</span>
       </div>
       <div className="ml-1 flex items-center gap-2 border-l border-zinc-800 pl-3">
-        <span className="text-xs text-zinc-500">YC walkthrough</span>
+        <span className="max-w-[140px] truncate text-xs text-zinc-500">
+          Account
+        </span>
       </div>
     </header>
   );

@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cipher — YC walkthrough",
-  description: "AI crypto co-pilot demo",
+  title: "Cipher",
+  description: "AI crypto co-pilot",
 };
 
 export default function RootLayout({
