@@ -13,7 +13,6 @@ import type {
   AgentArtifact,
   AgentRun,
   DaoArtifact,
-  DcaArtifact,
   GeneralArtifact,
   TaArtifact,
 } from "@cipher/agent-jobs/types";
@@ -57,14 +56,34 @@ function agentKindTitle(type: AgentRun["type"]) {
 function guardRailsFromRun(run: AgentRun): Array<{ label: string; value: string }> {
   const p = run.policy ?? {};
   const preset = String(p.preset ?? run.type);
+  const intervalSeconds = Number(p.intervalSeconds ?? 0);
+  const live =
+    p.live === true ||
+    intervalSeconds > 0 ||
+    /every\s+\d+/i.test(run.goal);
+
   if (preset === "dca") {
+    const cadence =
+      intervalSeconds > 0
+        ? `every ${intervalSeconds}s`
+        : live && /every\s+(\d+)\s*(s|sec)/i.test(run.goal)
+          ? `every ${run.goal.match(/every\s+(\d+)\s*(s|sec)/i)?.[1] ?? "?"}s`
+          : String(p.cadence ?? "custom");
     return [
       {
         label: "Buy size",
-        value: `$${Number(p.amountUsd ?? 50)} / ${String(p.cadence ?? "weekly")}`,
+        value: `$${Number(p.amountUsd ?? 1)} · ${cadence}`,
       },
-      { label: "Asset", value: String(p.asset ?? "ETH") },
-      { label: "Mode", value: "One-shot schedule (confirm before live buys)" },
+      {
+        label: "Asset",
+        value: String(p.buyToken ?? p.asset ?? "ETH"),
+      },
+      {
+        label: "Mode",
+        value: live
+          ? "Live swaps until funds run out or you Stop"
+          : "Schedule only (no live buys)",
+      },
     ];
   }
   if (preset === "ta") {
@@ -88,6 +107,59 @@ function guardRailsFromRun(run: AgentRun): Array<{ label: string; value: string 
     },
     { label: "Mode", value: "Long-running autonomous job" },
   ];
+}
+
+function explorerTxUrl(chainId: number | undefined, hash: string): string {
+  if (chainId === 999) return `https://hyperevmscan.io/tx/${hash}`;
+  if (chainId === 8453) return `https://basescan.org/tx/${hash}`;
+  if (chainId === 42161) return `https://arbiscan.io/tx/${hash}`;
+  if (chainId === 1) return `https://etherscan.io/tx/${hash}`;
+  return `https://hyperevmscan.io/tx/${hash}`;
+}
+
+function executedTxsFromRun(run: AgentRun): Array<{
+  at: string;
+  label: string;
+  hash: string;
+  amountUsd?: number;
+}> {
+  const out: Array<{
+    at: string;
+    label: string;
+    hash: string;
+    amountUsd?: number;
+  }> = [];
+
+  const artifact = run.artifact;
+  if (artifact?.kind === "dca") {
+    for (const leg of artifact.legs) {
+      if (!leg.txHash) continue;
+      out.push({
+        at: leg.date,
+        label: `Buy $${leg.amountUsd} ${artifact.asset}`,
+        hash: leg.txHash,
+        amountUsd: leg.amountUsd,
+      });
+    }
+  }
+
+  if (out.length === 0) {
+    for (const s of run.steps) {
+      if (s.status !== "done" || !s.detail) continue;
+      const m = s.detail.match(/(0x[a-fA-F0-9]{64})/);
+      if (!m) continue;
+      if (!/swap|buy|leg/i.test(s.label) && !/leg\s+\d+/i.test(s.detail)) {
+        continue;
+      }
+      out.push({
+        at: s.at,
+        label: s.label,
+        hash: m[1]!,
+      });
+    }
+  }
+
+  return out;
 }
 
 export function AgentRunDetail({ runId }: { runId: string }) {
@@ -278,11 +350,14 @@ export function AgentRunDetail({ runId }: { runId: string }) {
                   Allowed chains
                 </p>
                 <ul className="flex flex-wrap gap-2">
-                  {(String(run.policy?.preset ?? run.type) === "dca"
-                    ? ["Base", "Ethereum"]
-                    : String(run.policy?.preset ?? run.type) === "ta"
-                      ? ["Binance public · spot"]
-                      : ["Open web", "E2B sandbox"]
+                  {(Number(run.policy?.chainId) === 999 ||
+                  /hyper/i.test(run.goal)
+                    ? ["HyperEVM"]
+                    : String(run.policy?.preset ?? run.type) === "dca"
+                      ? ["Base", "Ethereum", "HyperEVM"]
+                      : String(run.policy?.preset ?? run.type) === "ta"
+                        ? ["Binance public · spot"]
+                        : ["Open web", "E2B sandbox"]
                   ).map((c) => (
                     <li
                       key={c}
@@ -340,7 +415,17 @@ export function AgentRunDetail({ runId }: { runId: string }) {
               )}
             </section>
 
-            {run.artifact && <ArtifactView artifact={run.artifact} />}
+            {(run.artifact?.kind === "dca" ||
+              (String(run.policy?.preset ?? run.type) === "dca" &&
+                Boolean(run.wallet))) && (
+              <ExecutedTradesView
+                run={run}
+                chainId={Number(run.policy?.chainId ?? 999)}
+              />
+            )}
+            {run.artifact && run.artifact.kind !== "dca" && (
+              <ArtifactView artifact={run.artifact} />
+            )}
             {run.error && (
               <p className="text-sm text-red-400">Error: {run.error}</p>
             )}
@@ -352,59 +437,88 @@ export function AgentRunDetail({ runId }: { runId: string }) {
 }
 
 function ArtifactView({ artifact }: { artifact: AgentArtifact }) {
-  if (artifact.kind === "dca") return <DcaView a={artifact} />;
+  if (artifact.kind === "dca") return null;
   if (artifact.kind === "ta") return <TaView a={artifact} />;
   if (artifact.kind === "dao_research") return <DaoView a={artifact} />;
   return <GeneralView a={artifact} />;
 }
 
 function GeneralView({ a }: { a: GeneralArtifact }) {
+  const title = a.citations && a.citations.length > 0 ? "Research brief" : "Result";
   return (
     <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <h2 className="text-sm font-medium text-zinc-100">Result</h2>
-      <p className="text-sm text-zinc-400">{a.summary}</p>
+      <h2 className="text-sm font-medium text-zinc-100">{title}</h2>
+      <p className="text-sm text-zinc-400 whitespace-pre-wrap">{a.summary}</p>
       <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-300">
         {a.bullets.map((b) => (
           <li key={b.slice(0, 48)}>{b}</li>
         ))}
       </ul>
       {a.citations && a.citations.length > 0 && (
-        <ul className="space-y-1 text-xs text-sky-400">
-          {a.citations.map((c) => (
-            <li key={c.url}>
-              <a href={c.url} target="_blank" rel="noreferrer" className="hover:underline">
-                {c.title}
-              </a>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-1">
+          <p className="text-xs uppercase tracking-wide text-zinc-600">Sources</p>
+          <ul className="space-y-1 text-xs text-sky-400">
+            {a.citations.map((c) => (
+              <li key={c.url}>
+                <a
+                  href={c.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:underline"
+                >
+                  {c.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
 }
 
-function DcaView({ a }: { a: DcaArtifact }) {
+function ExecutedTradesView({
+  run,
+  chainId,
+}: {
+  run: AgentRun;
+  chainId: number;
+}) {
+  const txs = executedTxsFromRun(run);
+  const summary =
+    run.artifact?.kind === "dca" ? run.artifact.summary : undefined;
+
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
-      <h2 className="text-sm font-medium text-zinc-100">DCA schedule</h2>
-      <p className="text-sm text-zinc-400">{a.summary}</p>
-      <p className="text-xs text-zinc-500">
-        {a.amountUsd} USD · {a.asset} · {a.cadence} · next {a.nextRunAt}
-        {a.walletAddress
-          ? ` · wallet ${shortAddr(a.walletAddress)}`
-          : ""}
-      </p>
-      <ul className="space-y-1 text-sm text-zinc-300">
-        {a.legs.map((leg) => (
-          <li
-            key={leg.date}
-            className="flex justify-between border-t border-zinc-800/80 py-1.5"
-          >
-            <span>{leg.date}</span>
-            <span>${leg.amountUsd}</span>
-          </li>
-        ))}
-      </ul>
+    <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <h2 className="text-sm font-medium text-zinc-100">Executed trades</h2>
+      {summary && <p className="text-sm text-zinc-400">{summary}</p>}
+      {txs.length === 0 ? (
+        <p className="text-sm text-zinc-500">
+          No swaps yet — waiting for capital + native gas, then buys appear here.
+        </p>
+      ) : (
+        <ul className="space-y-1 text-sm text-zinc-300">
+          {txs.map((tx) => (
+            <li
+              key={tx.hash}
+              className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800/80 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-zinc-100">{tx.label}</p>
+                <p className="text-[11px] text-zinc-600">{formatAt(tx.at)}</p>
+              </div>
+              <a
+                href={explorerTxUrl(chainId, tx.hash)}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 font-mono text-xs text-sky-400 hover:underline"
+              >
+                {shortAddr(tx.hash)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
@@ -466,10 +580,9 @@ function TaView({ a }: { a: TaArtifact }) {
 function DaoView({ a }: { a: DaoArtifact }) {
   return (
     <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
-      <h2 className="text-sm font-medium text-zinc-100">
-        DAO research · {a.topic}
-      </h2>
-      <p className="text-sm text-zinc-400">{a.summary}</p>
+      <h2 className="text-sm font-medium text-zinc-100">Research brief</h2>
+      <p className="text-xs text-zinc-600">{a.topic}</p>
+      <p className="text-sm text-zinc-400 whitespace-pre-wrap">{a.summary}</p>
       <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-300">
         {a.bullets.map((b) => (
           <li key={b.slice(0, 40)}>{b}</li>

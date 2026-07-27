@@ -19,7 +19,7 @@ export function ErvoLogo({
   const px = SIZES[size];
   return (
     <Image
-      src="/logo.png"
+      src="/logo.png?v=4"
       alt="Ervo"
       width={px}
       height={px}

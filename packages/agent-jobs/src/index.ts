@@ -15,11 +15,20 @@ export type {
 } from "./types";
 export { toPublicAgentRun } from "./types";
 export { agentRunStore } from "./store";
-export { kickAgentRun, executeAgentRun } from "./worker";
+export { kickAgentRun, executeAgentRun, setLiveAgentExecutor } from "./worker";
 export { fetchBinanceKlines, resolveBinanceSymbol } from "./market-data";
 export { agentWalletLabel } from "./labels";
 export { createEphemeralAgentWallet } from "./ephemeral-wallet";
 export { e2bConfigured, runInE2b, parseJsonFromE2bText } from "./e2b";
+export { setAgentRunPersister } from "./persist";
+export { runDcaJob } from "./runners/dca";
+export { runTaJob } from "./runners/ta";
+export { runDaoJob } from "./runners/dao";
+export { runGeneralJob } from "./runners/general";
+export {
+  reconcileAgentRun,
+  shouldResumeAgentRun,
+} from "./reconcile";
 
 import { agentRunStore } from "./store";
 import { kickAgentRun } from "./worker";

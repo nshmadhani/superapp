@@ -74,7 +74,7 @@ const turnkeyConfig: TurnkeyProviderConfig = {
               name: "Ervo",
               description: "AI crypto co-pilot",
               url: appUrl,
-              icons: [`${appUrl}/logo.png`],
+              icons: [`${appUrl}/icon.png`],
             },
           },
         }

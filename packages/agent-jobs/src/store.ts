@@ -1,10 +1,16 @@
 import { createEphemeralAgentWallet } from "./ephemeral-wallet";
+import { persistAgentRun } from "./persist";
 import type { AgentRun, AgentStep, AgentWallet, CreateAgentInput } from "./types";
 
 const runs = new Map<string, AgentRun>();
 
 function now() {
   return new Date().toISOString();
+}
+
+function touch(run: AgentRun): AgentRun {
+  persistAgentRun(run);
+  return structuredClone(run);
 }
 
 export const agentRunStore = {
@@ -15,7 +21,7 @@ export const agentRunStore = {
       wallet = createEphemeralAgentWallet();
     }
     const run: AgentRun = {
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
       userId: input.userId,
       type: input.type?.trim() || "general",
       goal: input.goal,
@@ -29,7 +35,18 @@ export const agentRunStore = {
       updatedAt: ts,
     };
     runs.set(run.id, run);
-    return structuredClone(run);
+    return touch(run);
+  },
+
+  /** Load a run into memory (e.g. from DB after restart). */
+  hydrate(run: AgentRun): AgentRun {
+    const copy = structuredClone(run);
+    // Never keep private keys in the shared map from hydrate.
+    if (copy.wallet?.privateKey) {
+      copy.wallet = { ...copy.wallet, privateKey: undefined };
+    }
+    runs.set(copy.id, copy);
+    return structuredClone(copy);
   },
 
   get(id: string): AgentRun | null {
@@ -63,7 +80,7 @@ export const agentRunStore = {
     const run = runs.get(id);
     if (!run) return null;
     Object.assign(run, patch, { updatedAt: now() });
-    return structuredClone(run);
+    return touch(run);
   },
 
   setWallet(id: string, wallet: AgentWallet): AgentRun | null {
@@ -75,7 +92,7 @@ export const agentRunStore = {
     if (!run) return null;
     run.steps = [...run.steps, { ...step, at: step.at ?? now() }];
     run.updatedAt = now();
-    return structuredClone(run);
+    return touch(run);
   },
 
   patchStep(
@@ -89,6 +106,6 @@ export const agentRunStore = {
       s.id === stepId ? { ...s, ...patch, at: now() } : s,
     );
     run.updatedAt = now();
-    return structuredClone(run);
+    return touch(run);
   },
 };

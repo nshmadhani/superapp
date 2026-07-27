@@ -1,10 +1,11 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { destroyAgentRun } from "@cipher/agent";
+import { destroyAgentRun, ensureAgentRuntime } from "@cipher/agent";
 
 type Ctx = { params: Promise<{ runId: string }> };
 
 export async function POST(_req: Request, ctx: Ctx) {
   try {
+    ensureAgentRuntime();
     const userId = await requireAuthUserId();
     const { runId } = await ctx.params;
     const result = await destroyAgentRun({ userId, runId });

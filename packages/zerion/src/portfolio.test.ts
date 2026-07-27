@@ -27,6 +27,10 @@ function mockOk(symbol = "ETH", value = 3000) {
   };
 }
 
+const EVM_ADDR = "0x1111111111111111111111111111111111111111";
+const EVM_ADDR_B = "0x2222222222222222222222222222222222222222";
+const SOL_ADDR = "So11111111111111111111111111111111111111112";
+
 describe("fetchPortfolio", () => {
   beforeEach(() => {
     clearPortfolioCache();
@@ -43,11 +47,23 @@ describe("fetchPortfolio", () => {
 
   it("maps zerion payload", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(mockOk()));
-    const snap = await fetchPortfolio("0xabc", "test-key");
+    const snap = await fetchPortfolio(EVM_ADDR, "test-key");
     expect(snap.positions[0]?.symbol).toBe("ETH");
     expect(snap.totalValueUsd).toBe(3000);
     const calledUrl = String(vi.mocked(fetch).mock.calls[0]?.[0]);
     expect(calledUrl).toContain("filter%5Bpositions%5D=no_filter");
+  });
+
+  it("omits no_filter for Solana addresses", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(mockOk("SOL", 150)),
+    );
+    const snap = await fetchPortfolio(SOL_ADDR, "test-key");
+    expect(snap.chainFamily).toBe("solana");
+    expect(snap.positions[0]?.symbol).toBe("SOL");
+    const calledUrl = String(vi.mocked(fetch).mock.calls[0]?.[0]);
+    expect(calledUrl).not.toContain("filter%5Bpositions%5D=no_filter");
   });
 
   it("maps DeFi / Morpho complex positions", async () => {
@@ -79,7 +95,7 @@ describe("fetchPortfolio", () => {
         }),
       }),
     );
-    const snap = await fetchPortfolio("0xabc", "test-key");
+    const snap = await fetchPortfolio(EVM_ADDR, "test-key");
     expect(snap.positions[0]?.kind).toBe("defi");
     expect(snap.positions[0]?.protocol).toBe("Morpho");
     expect(snap.positions[0]?.symbol).toBe("USDC");
@@ -89,8 +105,8 @@ describe("fetchPortfolio", () => {
   it("serves cache on second call without another HTTP", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockOk());
     vi.stubGlobal("fetch", fetchMock);
-    await fetchPortfolio("0xAbC", "test-key");
-    await fetchPortfolio("0xabc", "test-key");
+    await fetchPortfolio(EVM_ADDR, "test-key");
+    await fetchPortfolio(EVM_ADDR.toUpperCase().replace("0X", "0x"), "test-key");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -104,8 +120,8 @@ describe("fetchPortfolio", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const a = fetchPortfolio("0xdedupe", "test-key");
-    const b = fetchPortfolio("0xDedupe", "test-key");
+    const a = fetchPortfolio(EVM_ADDR, "test-key");
+    const b = fetchPortfolio(EVM_ADDR.toLowerCase(), "test-key");
     // Flush rate-limit queue so the single HTTP starts
     await Promise.resolve();
     await Promise.resolve();
@@ -124,13 +140,13 @@ describe("fetchPortfolio", () => {
     const agg = await fetchAggregatedPortfolio([
       {
         id: "1",
-        address: "0xaaa",
+        address: EVM_ADDR,
         chainFamily: "evm",
         source: "turnkey",
       },
       {
         id: "2",
-        address: "0xbbb",
+        address: EVM_ADDR_B,
         chainFamily: "evm",
         source: "turnkey",
       },

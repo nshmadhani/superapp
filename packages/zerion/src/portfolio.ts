@@ -77,11 +77,15 @@ async function fetchPortfolioUncached(
   address: string,
   apiKey: string,
 ): Promise<PortfolioSnapshot> {
+  const chainFamily = detectChainFamily(address);
   const url = new URL(
     `https://api.zerion.io/v1/wallets/${encodeURIComponent(address)}/positions/`,
   );
-  // Include DeFi (Morpho vaults, lending, LP, …) plus wallet tokens.
-  url.searchParams.set("filter[positions]", "no_filter");
+  // EVM: include DeFi (Morpho, lending, LP, …) plus wallet tokens.
+  // Solana: Zerion rejects filter[positions]=no_filter — use default positions.
+  if (chainFamily === "evm") {
+    url.searchParams.set("filter[positions]", "no_filter");
+  }
   url.searchParams.set("currency", "usd");
   url.searchParams.set("filter[trash]", "only_non_trash");
 
@@ -123,8 +127,6 @@ async function fetchPortfolioUncached(
       };
     }>;
   };
-
-  const chainFamily = detectChainFamily(address);
 
   const positions: PortfolioPosition[] = (body.data ?? []).map((row) => {
     const attrs = row.attributes;

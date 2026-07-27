@@ -57,7 +57,7 @@ print(json.dumps(out))
 }
 
 function inferAsset(goal: string): string | null {
-  const m = goal.match(/\b(ETH|BTC|SOL|USDC|WETH|LINK|UNI|AAVE)\b/i);
+  const m = goal.match(/\b(ETH|BTC|SOL|USDC|WETH|LINK|UNI|AAVE|HYPE)\b/i);
   return m ? m[1]!.toUpperCase() : null;
 }
 

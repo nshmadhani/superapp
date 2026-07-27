@@ -43,7 +43,8 @@ export type DcaArtifact = {
   amountUsd: number;
   cadence: string;
   nextRunAt: string;
-  legs: Array<{ date: string; amountUsd: number }>;
+  /** Executed buys only (no foresight schedule). */
+  legs: Array<{ date: string; amountUsd: number; txHash?: string }>;
   summary: string;
   walletAddress?: string;
   walletLabel?: string;
@@ -112,6 +113,8 @@ export type AgentRun = {
 export type CreateAgentInput = {
   userId: string;
   goal: string;
+  /** Optional fixed id (backfill / tests). */
+  id?: string;
   /** Optional preset hint (`dca` | `ta` | `dao_research`) or freeform label. */
   type?: AgentType;
   policy?: Record<string, unknown>;

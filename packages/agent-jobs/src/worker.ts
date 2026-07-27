@@ -7,6 +7,15 @@ import type { AgentArtifact, AgentRun } from "./types";
 
 const inflight = new Set<string>();
 
+export type LiveAgentExecutor = (runId: string) => Promise<AgentRun | null>;
+
+let liveExecutor: LiveAgentExecutor | null = null;
+
+/** Register host-side live executor (funded DCA loop). Keys never enter E2B. */
+export function setLiveAgentExecutor(fn: LiveAgentExecutor | null): void {
+  liveExecutor = fn;
+}
+
 export function kickAgentRun(runId: string): void {
   if (inflight.has(runId)) return;
   inflight.add(runId);
@@ -17,6 +26,17 @@ function presetOf(run: AgentRun): string {
   const fromPolicy = run.policy?.preset;
   if (typeof fromPolicy === "string" && fromPolicy.trim()) return fromPolicy;
   return String(run.type || "general");
+}
+
+/** Funded DCA (or policy.live) → long-running host loop after E2B plan. */
+export function shouldRunLive(run: AgentRun): boolean {
+  if (!run.wallet) return false;
+  if (run.policy?.live === true) return true;
+  if (typeof run.policy?.intervalSeconds === "number") return true;
+  const preset = presetOf(run);
+  if (preset === "dca") return true;
+  if (/every\s+\d+\s*(s|sec|second|m|min)/i.test(run.goal)) return true;
+  return false;
 }
 
 export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
@@ -48,6 +68,10 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
   });
   agentRunStore.patchStep(runId, prepId, { status: "done" });
 
+  if (shouldRunLive(run) && liveExecutor) {
+    return liveExecutor(runId);
+  }
+
   const preset = presetOf(run);
   const workId = crypto.randomUUID();
   const workLabel =
@@ -57,7 +81,7 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
         ? "Fetch OHLCV + analyze in E2B"
         : preset === "dao_research"
           ? "Research DAO + summarize in E2B"
-          : "Run autonomous job";
+          : "Run autonomous job in E2B";
   agentRunStore.appendStep(runId, {
     id: workId,
     label: workLabel,

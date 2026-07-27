@@ -26,13 +26,13 @@ export function resolveBinanceSymbol(raw: string): string {
   return `${key.toUpperCase()}USDT`;
 }
 
-/** Public Binance spot klines — no API key. */
+/** Public Binance.US spot klines — no API key (avoids geo 451 on api.binance.com). */
 export async function fetchBinanceKlines(
   symbol: string,
   interval = "1d",
   limit = 90,
 ): Promise<Candle[]> {
-  const url = new URL("https://api.binance.com/api/v3/klines");
+  const url = new URL("https://api.binance.us/api/v3/klines");
   url.searchParams.set("symbol", resolveBinanceSymbol(symbol));
   url.searchParams.set("interval", interval);
   url.searchParams.set("limit", String(limit));

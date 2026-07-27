@@ -1,13 +1,17 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { agentRunStore, toPublicAgentRun } from "@cipher/agent-jobs";
+import { toPublicAgentRun } from "@cipher/agent-jobs";
+import { ensureAgentRuntime, hydrateAgentRun } from "@cipher/agent";
+import { createDb } from "@cipher/db";
 
 type Ctx = { params: Promise<{ runId: string }> };
 
 export async function GET(_req: Request, ctx: Ctx) {
   try {
+    ensureAgentRuntime();
     const userId = await requireAuthUserId();
     const { runId } = await ctx.params;
-    const run = agentRunStore.get(runId);
+    const db = createDb();
+    const run = await hydrateAgentRun(db, userId, runId);
     if (!run || run.userId !== userId) {
       return Response.json({ error: "not_found" }, { status: 404 });
     }
