@@ -4,6 +4,8 @@ export type DemoChat = {
   id: string;
   title: string;
   messages: UIMessage[];
+  /** Optional link from an agent control panel */
+  linkedAgentId?: string;
 };
 
 export type DemoAgentActivity = {
@@ -17,19 +19,20 @@ export type DemoAgentActivity = {
 export type DemoAgent = {
   id: string;
   title: string;
-  kind: "dca" | "ta";
+  kind: "dca";
   status: "active" | "paused" | "completed";
   askedTo: string;
-  brief: string;
-  params: Array<{ label: string; value: string }>;
-  activity: DemoAgentActivity[];
-  /** TA-only chart series (close prices, oldest → newest) */
-  series?: number[];
-  signal?: {
-    bias: "long" | "short" | "neutral";
-    headline: string;
-    levels: Array<{ label: string; value: string }>;
+  /** Agent’s own dedicated wallet */
+  agentWallet: {
+    label: string;
+    address: string;
+    chainFamily: "evm" | "solana";
   };
+  guardRails: Array<{ label: string; value: string }>;
+  allowedChains: string[];
+  activity: DemoAgentActivity[];
+  /** Matching chat to instruct / update guard rails */
+  chatId: string;
 };
 
 export type DemoPosition = {
@@ -75,77 +78,70 @@ function userMsg(id: string, text: string): UIMessage {
   return { id, role: "user", parts: [textPart(text)] };
 }
 
-function assistantMsg(
-  id: string,
-  parts: UIMessage["parts"],
-): UIMessage {
+function assistantMsg(id: string, parts: UIMessage["parts"]): UIMessage {
   return { id, role: "assistant", parts };
 }
 
 const ADDR_TRADING = "0xA1b2c3d4e5f6789012345678901234567890abcd";
 const ADDR_SOL = "7nYxK9mPqR2vL8wT4cB6hJ1sF3dA5gU0eZxWkP2";
+const ADDR_DCA_AGENT = "0xDCA01a2b3c4d5e6f78901234567890abcdef01";
 
-/** One saga: swap → bridge → lend, signed across Trading + Solana. */
-const multiStepPlanReady = {
+const kaminoPlanDone = {
   type: "multi_step_plan" as const,
-  summary:
-    "Swap 0.4 ETH→USDC on Base, bridge 500 USDC to Solana, lend 500 USDC on Kamino",
-  status: "ready" as const,
+  summary: "Get 0.4 ETH from Base into a Kamino vault on Solana",
+  walletsUsed: [
+    {
+      label: "Trading",
+      address: ADDR_TRADING,
+      role: "Source ETH · swap & bridge out",
+    },
+    {
+      label: "Solana",
+      address: ADDR_SOL,
+      role: "Receive + deposit into Kamino",
+    },
+  ],
   legs: [
     {
       id: "leg-swap",
       action: "swap" as const,
-      title: "Swap 0.4 ETH → ~1,042 USDC",
-      detail: "LI.FI · Uniswap V3 on Base · 0.12% impact",
+      title: "Move 0.4 ETH into a bridgeable form",
+      detail: "Routed on Base so it can leave for Solana",
       walletLabel: "Trading",
       walletAddress: ADDR_TRADING,
       chainLabel: "Base",
-      status: "awaiting_signature" as const,
+      txHash: "0x8f3a91c2e7b04d1a6e55c0b9f2d8471e3a0c5b6d",
     },
     {
       id: "leg-bridge",
       action: "bridge" as const,
-      title: "Bridge 500 USDC Base → Solana",
-      detail: "LI.FI · Allbridge · lands in Solana wallet · ~90s",
+      title: "Bridge value over to Solana",
+      detail: "Cross-chain hop into the Solana wallet you picked",
       walletLabel: "Trading",
       walletAddress: ADDR_TRADING,
       chainLabel: "Base → Solana",
-      status: "pending" as const,
-    },
-    {
-      id: "leg-lend",
-      action: "lend" as const,
-      title: "Lend 500 USDC on Kamino",
-      detail: "Supply USDC → Kamino lend · ~5.4% APY · execute (not discovery)",
-      walletLabel: "Solana",
-      walletAddress: ADDR_SOL,
-      chainLabel: "Solana",
-      status: "pending" as const,
-    },
-  ],
-};
-
-const multiStepPlanDone = {
-  ...multiStepPlanReady,
-  status: "completed" as const,
-  legs: [
-    {
-      ...multiStepPlanReady.legs[0]!,
-      status: "done" as const,
-      txHash: "0x8f3a91c2e7b04d1a6e55c0b9f2d8471e3a0c5b6d",
-    },
-    {
-      ...multiStepPlanReady.legs[1]!,
-      status: "done" as const,
       txHash: "0x2c1b0a9f8e7d6c5b4a3928170615243f0e1d2c3b",
     },
     {
-      ...multiStepPlanReady.legs[2]!,
-      status: "done" as const,
+      id: "leg-vault",
+      action: "deposit" as const,
+      title: "Deposit into Kamino vault",
+      detail: "Vault deposit from Solana wallet — live position",
+      walletLabel: "Solana",
+      walletAddress: ADDR_SOL,
+      chainLabel: "Solana",
       txHash: "5Kq7mN2pR8sT1uV4wX6yZ0aB3cD9eF1gH2iJ4kL",
     },
   ],
 };
+
+const hypeSeries = [
+  18.2, 18.6, 19.1, 18.4, 17.9, 18.8, 19.4, 20.1, 19.6, 21.0, 22.4, 21.8, 23.1,
+  24.0, 23.2, 22.1, 21.5, 22.8, 24.6, 25.9, 25.1, 26.4, 27.8, 26.9, 28.2, 29.1,
+  27.4, 26.0, 24.8, 25.6, 27.0, 28.5, 30.2, 29.4, 31.0, 32.4, 31.1, 29.8, 28.2,
+  27.0, 28.6, 30.1, 29.2, 27.8, 26.4, 25.1, 24.0, 24.8, 26.2, 25.4, 24.1, 23.0,
+  22.2, 23.5, 24.9, 24.2, 23.1, 22.0, 21.4, 20.8,
+];
 
 export const DEMO_CHATS: DemoChat[] = [
   {
@@ -154,7 +150,7 @@ export const DEMO_CHATS: DemoChat[] = [
     messages: [
       userMsg(
         "u1",
-        "Swap 0.4 ETH to USDC on Base, bridge 500 USDC to my Solana wallet, then lend that USDC — one flow, I’ll sign whatever wallets you need.",
+        "I want to put 0.4 ETH into a Kamino vault. Can you do it for me?",
       ),
       assistantMsg("a1", [
         toolPart(
@@ -173,6 +169,12 @@ export const DEMO_CHATS: DemoChat[] = [
                 address: "7nYx…kP2",
                 chainFamily: "solana",
               },
+              {
+                id: "w-vault",
+                label: "Vault",
+                address: "0xBBcc…ccdd",
+                chainFamily: "evm",
+              },
             ],
           },
           "tc-wallets-1",
@@ -181,7 +183,7 @@ export const DEMO_CHATS: DemoChat[] = [
           "get_portfolio",
           {
             type: "portfolio_overview",
-            totalValueUsd: 27540.95,
+            totalValueUsd: 52640.95,
             positions: [
               {
                 symbol: "ETH",
@@ -191,11 +193,11 @@ export const DEMO_CHATS: DemoChat[] = [
                 walletLabel: "Trading",
               },
               {
-                symbol: "USDC",
-                name: "USD Coin",
-                quantity: "6200.00",
-                valueUsd: 6200,
-                walletLabel: "Trading",
+                symbol: "ETH",
+                name: "Ether",
+                quantity: "4.00",
+                valueUsd: 15760,
+                walletLabel: "Vault",
               },
               {
                 symbol: "SOL",
@@ -218,10 +220,36 @@ export const DEMO_CHATS: DemoChat[] = [
                 totalValueUsd: 9120.4,
                 chainFamily: "solana",
               },
+              {
+                walletId: "w-vault",
+                label: "Vault",
+                totalValueUsd: 25100,
+                chainFamily: "evm",
+              },
             ],
           },
           "tc-pf-1",
         ),
+        toolPart(
+          "ask_user",
+          {
+            type: "clarification",
+            question:
+              "Kamino lives on Solana — which wallets should I use? I’ll pull ETH from one side and deposit from a Solana wallet.",
+            options: [
+              "Trading (ETH) + Solana (vault)",
+              "Vault (ETH) + Solana (vault)",
+              "Let me pick differently",
+            ],
+          },
+          "tc-ask-wallets",
+        ),
+        textPart(
+          "You’ve got ETH on **Trading** and **Vault**, and a **Solana** wallet ready for Kamino. Tell me which pairing to use and I’ll path the rest — swap / bridge / deposit as needed.",
+        ),
+      ]),
+      userMsg("u2", "Trading (ETH) + Solana (vault)"),
+      assistantMsg("a2", [
         toolPart(
           "get_yields",
           {
@@ -234,57 +262,40 @@ export const DEMO_CHATS: DemoChat[] = [
                 tvlUsd: 890_000_000,
               },
               {
-                project: "aave-v3",
-                symbol: "USDC",
-                chain: "Base",
-                apy: 4.2,
-                tvlUsd: 420_000_000,
+                project: "kamino",
+                symbol: "SOL",
+                chain: "Solana",
+                apy: 7.1,
+                tvlUsd: 410_000_000,
               },
             ],
           },
           "tc-yields",
         ),
-        toolPart("create_plan", multiStepPlanReady, "tc-multi-plan"),
-        toolPart(
-          "simulate_plan",
-          {
-            ok: true,
-            warnings: [],
-            summary:
-              "3-leg saga simulated · swap+bridge on Trading · lend execute on Solana",
-          },
-          "tc-sim-multi",
-        ),
-        textPart(
-          "One multi-step plan across **two wallets**:\n\n1. **Trading (Base)** signs the swap\n2. **Trading (Base)** signs the bridge out\n3. **Solana** signs the lend deposit on Kamino (full execute — not discovery)\n\nApprove the saga once; Cipher will prompt each wallet in order.",
-        ),
-      ]),
-      userMsg("u2", "Looks good — run the whole thing."),
-      assistantMsg("a2", [
+        toolPart("create_plan", kaminoPlanDone, "tc-kamino-plan"),
         toolPart(
           "execute_plan",
           {
             type: "multi_step_execution",
-            planId: "demo-plan-multi",
+            planId: "demo-kamino",
             status: "completed",
             legsCompleted: 3,
           },
-          "tc-exec-multi",
+          "tc-exec",
         ),
-        toolPart("create_plan", multiStepPlanDone, "tc-multi-done"),
         textPart(
-          "All three legs executed.\n\n- Swap settled on Base (`0x8f3a…5b6d`) — **Trading**\n- Bridge completed Base→Solana (`0x2c1b…2c3b`) — **Trading** signed source\n- Lend live on Kamino (`5Kq7…kL`) — **Solana** signed supply\n\nYou’re earning on the bridged USDC. Dashboard reflects both wallets.",
+          "Done — **0.4 ETH** is in the Kamino vault via **Trading → Solana**.\n\nUsed the wallets you picked. The plan below is what needed signatures and what actually ran.",
         ),
       ]),
     ],
   },
   {
     id: "dao-research",
-    title: "Token / DAO research",
+    title: "Token / market research",
     messages: [
       userMsg(
         "d1",
-        "What’s going on with Uniswap governance right now? Any proposals that affect UNI holders this month?",
+        "Give me a full read on HYPE — not just governance. What’s the street saying, what’s moving price, any risk flags?",
       ),
       assistantMsg("d2", [
         toolPart(
@@ -292,34 +303,44 @@ export const DEMO_CHATS: DemoChat[] = [
           {
             results: [
               {
-                title: "Uniswap Governance — Active Proposals",
-                url: "https://www.tally.xyz/gov/uniswap",
-                content:
-                  "Several temperature checks and on-chain votes active around fee switch and grants.",
+                title: "Hyperliquid — protocol overview",
+                url: "https://hyperliquid.xyz/",
+                content: "L1 perps venue · HYPE as gas / staking asset.",
               },
               {
-                title: "Uniswap Forum — Fee Switch Discussion",
-                url: "https://gov.uniswap.org/",
+                title: "Messari — HYPE research",
+                url: "https://messari.io/report/hyperliquid",
                 content:
-                  "Community debate on activating protocol fees and UNI value accrual.",
+                  "Token unlock schedule, float, and competitive positioning vs CEX perps.",
               },
               {
-                title: "Messari — UNI governance recap",
-                url: "https://messari.io/report/uniswap",
+                title: "DefiLlama — Hyperliquid TVL & volume",
+                url: "https://defillama.com/protocol/hyperliquid",
+                content: "Open interest and fee trends over the last quarter.",
+              },
+              {
+                title: "X / Twitter — @HyperliquidX & CT thread digest",
+                url: "https://x.com/search?q=HYPE%20Hyperliquid",
                 content:
-                  "Summary of recent quorum dynamics and delegate concentration.",
+                  "CT split: bulls on volume leadership; bears on unlock overhang and copycat venues.",
+              },
+              {
+                title: "Governance / forum notes",
+                url: "https://gov.hyperliquid.community/",
+                content:
+                  "Sparse formal DAO surface; most decisions still core-team led.",
               },
             ],
           },
-          "tc-search-uni",
+          "tc-research-hype",
         ),
         textPart(
-          "**Uniswap governance — this month’s pulse**\n\n1. **Fee switch** — Still the main thread. Forum temperature checks are warm; no final on-chain execution yet. If it lands, protocol fees could accrue toward UNI (details still contested).\n2. **Grants / accountability** — Active discussion on tighter reporting for funded teams.\n3. **Delegate map** — Voting power still concentrated; quorum risk on contentious votes.\n\nNothing that forces an immediate wallet action for a passive UNI holder, but fee-switch timing is the narrative to watch. Want a deeper dive on a specific proposal ID next?",
+          "**HYPE — wide-angle research**\n\n### Narrative (Twitter / CT)\n- **Bulls:** Still the perps volume leader; “CEX killer” memes keep attention. Fee share / buyback chatter whenever volume prints hot.\n- **Bears:** Unlock calendar anxiety, competitor launches, and “what if OI migrates” threads every quiet week.\n- Sentiment is **loud but not one-sided** — good for trading attention, noisy for long-hold conviction.\n\n### Fundamentals / market structure\n- Product is the venue; HYPE is tied to **usage + staking / gas** more than a classic app-token flywheel.\n- Public dashboards still show **strong volume / OI** vs peers; that’s the core bull case.\n- Float and unlock pacing matter more than any single tweet — check Messari/unlock calendars before sizing.\n\n### Governance / DAO\n- Not a busy on-chain DAO like UNI/ARB. Expect **core-driven** roadmap; treat “governance alpha” as thin.\n\n### Risk flags\n1. Unlock / distribution overhang\n2. Venue concentration / regulatory headlines\n3. Narrative rotation if volume cools\n\n### Bottom line\nTrade it as a **high-beta venue token** with social amplification — not a quiet compounder. Want me to dig next into unlocks, competitor fee wars, or a wallet-sized risk brief?",
         ),
       ]),
       userMsg(
         "d3",
-        "Compare that to Arbitrum DAO — any treasury or staking proposals I should know about?",
+        "Yeah — pull more from Twitter and any recent drama, then compare to a quieter bluechip like UNI.",
       ),
       assistantMsg("d4", [
         toolPart(
@@ -327,23 +348,116 @@ export const DEMO_CHATS: DemoChat[] = [
           {
             results: [
               {
-                title: "Arbitrum DAO — Proposals",
-                url: "https://www.tally.xyz/gov/arbitrum",
+                title: "CT recap — HYPE unlock discourse (this week)",
+                url: "https://x.com/search?q=HYPE%20unlock",
                 content:
-                  "Treasury and staking-related proposals under discussion.",
+                  "Recurring unlock FUD vs “already priced” counters; engagement spikes on large transfers.",
               },
               {
-                title: "Arbitrum Forum — Staking",
-                url: "https://forum.arbitrum.foundation/",
+                title: "Uniswap governance — fee switch temperature",
+                url: "https://gov.uniswap.org/",
                 content:
-                  "ARB staking design iterations and incentive programs.",
+                  "Slower, formal process; fee switch still the macro UNI narrative.",
+              },
+              {
+                title: "CoinDesk / The Block — Hyperliquid coverage",
+                url: "https://www.coindesk.com/tag/hyperliquid/",
+                content:
+                  "Press focuses on volume records and competitive pressure on CEXs.",
               },
             ],
           },
-          "tc-search-arb",
+          "tc-research-compare",
         ),
         textPart(
-          "**Arbitrum vs Uniswap (governance lens)**\n\n| | Uniswap | Arbitrum |\n|---|---|---|\n| Hot topic | Fee switch / value accrual | Treasury + staking design |\n| Holder impact | Indirect until fee switch ships | More direct via incentives / stake |\n| Tempo | Slower, high-stakes | Faster proposal cadence |\n\nIf you’re holding both: UNI is a **catalyst watch**; ARB is more about **participating in treasury/staking shape**. I can draft a one-page brief for either DAO next.",
+          "**HYPE vs UNI — research contrast**\n\n| | HYPE | UNI |\n|---|---|---|\n| Social | High velocity CT, drama cycles | Slower, governance-forum heavy |\n| Catalyst style | Volume prints, unlocks, memes | Fee switch / DAO votes |\n| Info diet | Twitter + dashboards | Forum + Tally + longform |\n| Holder job | Survive narrative whiplash | Track slow political process |\n\nRecent **Twitter drama** around HYPE clusters on unlocks and “is volume real / sticky.” UNI drama is quieter and procedural (fee switch pacing).\n\nI can keep this as a living brief — say the word and I’ll refresh social + gov sources anytime.",
+        ),
+      ]),
+    ],
+  },
+  {
+    id: "ta",
+    title: "Technical analysis",
+    messages: [
+      userMsg(
+        "t1",
+        "Can you run technical analysis on HYPE? I want history, levels, and whether a short still makes sense.",
+      ),
+      assistantMsg("t2", [
+        toolPart(
+          "get_price_history",
+          {
+            type: "price_series",
+            symbol: "HYPE",
+            timeframe: "1D",
+            lookbackDays: 90,
+            series: hypeSeries,
+            last: 20.8,
+            changePct: -8.4,
+          },
+          "tc-ohlcv",
+        ),
+        toolPart(
+          "web_search",
+          {
+            results: [
+              {
+                title: "HYPE / USD — TradingView",
+                url: "https://www.tradingview.com/symbols/HYPEUSD/",
+                content: "Daily structure and volume profile reference.",
+              },
+              {
+                title: "Coingecko — HYPE market data",
+                url: "https://www.coingecko.com/en/coins/hyperliquid",
+                content: "Spot reference and market cap context.",
+              },
+            ],
+          },
+          "tc-ta-search",
+        ),
+        textPart(
+          "**HYPE · daily TA**\n\nPulled **90d** closes plus public market references.\n\n**Structure:** Lower highs off the ~32 spike. Momentum cooled; price is working a mid-20s → low-20s grind.\n\n**Bias:** Mild **short / wait-for-break** — not a chase. Cleaner if 24 breaks with follow-through; invalidated back through the 30 area.\n\n**Levels**\n- Resistance ~27.8\n- Trigger zone ~24.0\n- Target pocket ~21.4–20.8\n- Invalidation ~30.2\n\nWant the same pass on another timeframe or a second token?",
+        ),
+      ]),
+    ],
+  },
+  {
+    id: "dca-chat",
+    title: "DCA agent",
+    linkedAgentId: "dca",
+    messages: [
+      userMsg(
+        "c1",
+        "Set up a weekly DCA — about $150 of ETH, keep it boring and automated.",
+      ),
+      assistantMsg("c2", [
+        toolPart(
+          "ask_user",
+          {
+            type: "clarification",
+            question: "Any hard rules for this agent?",
+            options: [
+              "Base only · skip if ETH +12% WoW",
+              "Base + Arbitrum · no skip rule",
+              "I’ll write custom guard rails",
+            ],
+          },
+          "tc-dca-ask",
+        ),
+        textPart(
+          "I can spin an autonomous DCA with its **own agent wallet**. You message here to change size, cadence, or guard rails anytime.",
+        ),
+      ]),
+      userMsg("c3", "Base only · skip if ETH +12% WoW"),
+      assistantMsg("c4", [
+        textPart(
+          "Locked in.\n\n- **Agent wallet:** `0xDCA0…ef01` (dedicated)\n- **Guard rails:** max $150/buy · skip if ETH WoW > +12%\n- **Allowed chains:** Base\n\nIt’s running — open the **DCA** agent panel for activity, or keep chatting here to tweak rules.",
+        ),
+      ]),
+      userMsg("c5", "Also don’t buy if gas is stupid — add that guard rail."),
+      assistantMsg("c6", [
+        textPart(
+          "Added: **skip when Base gas > 0.4 gwei effective** for the buy path. Activity log will show skips when that fires.",
         ),
       ]),
     ],
@@ -357,117 +471,55 @@ export const DEMO_AGENTS: DemoAgent[] = [
     kind: "dca",
     status: "active",
     askedTo:
-      "Every Monday buy $150 of ETH on Base from my Trading wallet using USDC. Keep running until I pause it. Prefer low slippage; skip a week if ETH is up >12% week-over-week.",
-    brief:
-      "Autonomous DCA is live. Cipher quotes via LI.FI, confirms under your standing policy (max $150/buy, Base only), and logs each run here.",
-    params: [
-      { label: "Asset", value: "ETH (Base)" },
-      { label: "Amount", value: "$150 USDC / buy" },
-      { label: "Cadence", value: "Weekly · Mondays 14:00 UTC" },
-      { label: "Wallet", value: "Trading" },
-      { label: "Guardrail", value: "Skip if ETH WoW > +12%" },
-      { label: "Next run", value: "Mon · in 3 days" },
+      "Every Monday buy $150 of ETH. Keep it automated. Base only. Skip a week if ETH is up more than 12% week-over-week. Later: also skip when gas is stupid.",
+    agentWallet: {
+      label: "DCA agent wallet",
+      address: ADDR_DCA_AGENT,
+      chainFamily: "evm",
+    },
+    guardRails: [
+      { label: "Max per buy", value: "$150 USDC" },
+      { label: "Momentum skip", value: "ETH WoW > +12%" },
+      { label: "Gas skip", value: "Base gas too high" },
+      { label: "Cadence", value: "Weekly · Mondays" },
     ],
+    allowedChains: ["Base"],
+    chatId: "dca-chat",
     activity: [
       {
         id: "r1",
         at: "2026-07-20T14:00:12Z",
         status: "done",
         title: "Bought 0.038 ETH",
-        detail: "Spent 149.92 USDC · Uniswap V3 · impact 0.08%",
+        detail: "From agent wallet · $149.92",
       },
       {
         id: "r2",
         at: "2026-07-13T14:00:09Z",
         status: "done",
         title: "Bought 0.041 ETH",
-        detail: "Spent 150.00 USDC · route via LI.FI",
+        detail: "From agent wallet · $150.00",
       },
       {
         id: "r3",
         at: "2026-07-06T14:00:11Z",
         status: "skipped",
-        title: "Skipped — guardrail",
-        detail: "ETH +14.2% WoW · policy skip",
+        title: "Skipped — momentum guard rail",
+        detail: "ETH +14.2% WoW",
       },
       {
         id: "r4",
         at: "2026-06-29T14:00:08Z",
         status: "done",
         title: "Bought 0.036 ETH",
-        detail: "Spent 149.88 USDC · Base",
+        detail: "From agent wallet · $149.88",
       },
       {
         id: "r5",
         at: "2026-07-27T14:00:00Z",
         status: "scheduled",
         title: "Next buy queued",
-        detail: "Will quote & execute under standing policy",
-      },
-    ],
-  },
-  {
-    id: "ta",
-    title: "Technical analysis",
-    kind: "ta",
-    status: "active",
-    askedTo:
-      "Watch HYPE on a daily timeframe. Flag when structure looks shortable vs when I’d rather wait. Use our historical series plus public OHLCV; keep it actionable, not noisy.",
-    brief:
-      "TA agent keeps a live read on HYPE. Chart below is built from the fused series; signal updates when structure or momentum flips.",
-    params: [
-      { label: "Market", value: "HYPE / USD" },
-      { label: "Timeframe", value: "1D" },
-      { label: "Lookback", value: "90 days" },
-      { label: "Data", value: "Public OHLCV + Cipher history" },
-      { label: "Last refresh", value: "12 min ago" },
-    ],
-    series: [
-      18.2, 18.6, 19.1, 18.4, 17.9, 18.8, 19.4, 20.1, 19.6, 21.0, 22.4, 21.8,
-      23.1, 24.0, 23.2, 22.1, 21.5, 22.8, 24.6, 25.9, 25.1, 26.4, 27.8, 26.9,
-      28.2, 29.1, 27.4, 26.0, 24.8, 25.6, 27.0, 28.5, 30.2, 29.4, 31.0, 32.4,
-      31.1, 29.8, 28.2, 27.0, 28.6, 30.1, 29.2, 27.8, 26.4, 25.1, 24.0, 24.8,
-      26.2, 25.4, 24.1, 23.0, 22.2, 23.5, 24.9, 24.2, 23.1, 22.0, 21.4, 20.8,
-    ],
-    signal: {
-      bias: "short",
-      headline:
-        "Lower highs after the 32.4 spike · momentum fading · short bias on daily if 24.0 breaks",
-      levels: [
-        { label: "Resistance", value: "27.80" },
-        { label: "Invalidation", value: "30.20" },
-        { label: "Trigger", value: "Break < 24.00" },
-        { label: "Target zone", value: "21.40 – 20.80" },
-      ],
-    },
-    activity: [
-      {
-        id: "t1",
-        at: "2026-07-26T18:12:00Z",
-        status: "done",
-        title: "Signal → short bias",
-        detail: "Structure: LH sequence · RSI divergence on daily",
-      },
-      {
-        id: "t2",
-        at: "2026-07-26T06:00:00Z",
-        status: "done",
-        title: "Refreshed OHLCV",
-        detail: "90d public candles fused with Cipher history",
-      },
-      {
-        id: "t3",
-        at: "2026-07-24T18:00:00Z",
-        status: "done",
-        title: "Neutral — wait",
-        detail: "Range-bound between 24–28 · no clean trigger",
-      },
-      {
-        id: "t4",
-        at: "2026-07-20T18:00:00Z",
-        status: "done",
-        title: "Long bias expired",
-        detail: "Failed hold above 30.2 · flipped watch to short setup",
+        detail: "Monday · agent wallet funded",
       },
     ],
   },
@@ -476,7 +528,7 @@ export const DEMO_AGENTS: DemoAgent[] = [
 export const DEMO_WALLETS: DemoWallet[] = [
   {
     walletId: "w-trading",
-    address: "0xA1b2c3d4e5f6789012345678901234567890abcd",
+    address: ADDR_TRADING,
     label: "Trading",
     chainFamily: "evm",
     source: "turnkey",
@@ -490,7 +542,7 @@ export const DEMO_WALLETS: DemoWallet[] = [
         chainId: "base",
         walletId: "w-trading",
         walletLabel: "Trading",
-        walletAddress: "0xA1b2c3d4e5f6789012345678901234567890abcd",
+        walletAddress: ADDR_TRADING,
       },
       {
         symbol: "USDC",
@@ -500,7 +552,7 @@ export const DEMO_WALLETS: DemoWallet[] = [
         chainId: "base",
         walletId: "w-trading",
         walletLabel: "Trading",
-        walletAddress: "0xA1b2c3d4e5f6789012345678901234567890abcd",
+        walletAddress: ADDR_TRADING,
       },
       {
         symbol: "cbBTC",
@@ -510,13 +562,13 @@ export const DEMO_WALLETS: DemoWallet[] = [
         chainId: "base",
         walletId: "w-trading",
         walletLabel: "Trading",
-        walletAddress: "0xA1b2c3d4e5f6789012345678901234567890abcd",
+        walletAddress: ADDR_TRADING,
       },
     ],
   },
   {
     walletId: "w-sol",
-    address: "7nYxK9mPqR2vL8wT4cB6hJ1sF3dA5gU0eZxWkP2",
+    address: ADDR_SOL,
     label: "Solana",
     chainFamily: "solana",
     source: "turnkey",
@@ -530,7 +582,7 @@ export const DEMO_WALLETS: DemoWallet[] = [
         chainId: "solana",
         walletId: "w-sol",
         walletLabel: "Solana",
-        walletAddress: "7nYxK9mPqR2vL8wT4cB6hJ1sF3dA5gU0eZxWkP2",
+        walletAddress: ADDR_SOL,
       },
       {
         symbol: "USDC",
@@ -540,7 +592,7 @@ export const DEMO_WALLETS: DemoWallet[] = [
         chainId: "solana",
         walletId: "w-sol",
         walletLabel: "Solana",
-        walletAddress: "7nYxK9mPqR2vL8wT4cB6hJ1sF3dA5gU0eZxWkP2",
+        walletAddress: ADDR_SOL,
       },
       {
         symbol: "JUP",
@@ -550,7 +602,7 @@ export const DEMO_WALLETS: DemoWallet[] = [
         chainId: "solana",
         walletId: "w-sol",
         walletLabel: "Solana",
-        walletAddress: "7nYxK9mPqR2vL8wT4cB6hJ1sF3dA5gU0eZxWkP2",
+        walletAddress: ADDR_SOL,
       },
     ],
   },
@@ -584,6 +636,36 @@ export const DEMO_WALLETS: DemoWallet[] = [
       },
     ],
   },
+  {
+    walletId: "w-dca-agent",
+    address: ADDR_DCA_AGENT,
+    label: "DCA agent",
+    chainFamily: "evm",
+    source: "turnkey",
+    totalValueUsd: 842.5,
+    positions: [
+      {
+        symbol: "USDC",
+        name: "USD Coin",
+        quantity: "620.00",
+        valueUsd: 620,
+        chainId: "base",
+        walletId: "w-dca-agent",
+        walletLabel: "DCA agent",
+        walletAddress: ADDR_DCA_AGENT,
+      },
+      {
+        symbol: "ETH",
+        name: "Ether",
+        quantity: "0.056",
+        valueUsd: 222.5,
+        chainId: "base",
+        walletId: "w-dca-agent",
+        walletLabel: "DCA agent",
+        walletAddress: ADDR_DCA_AGENT,
+      },
+    ],
+  },
 ];
 
 export function getDemoChat(id: string): DemoChat | undefined {
@@ -599,7 +681,7 @@ export function demoPortfolioOverview() {
   const totalValueUsd = DEMO_WALLETS.reduce((s, w) => s + w.totalValueUsd, 0);
   return {
     totalValueUsd,
-    asOf: new Date().toISOString(),
+    asOf: "2026-07-26T18:00:00.000Z",
     wallets: DEMO_WALLETS,
     positions: [...positions].sort(
       (a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0),

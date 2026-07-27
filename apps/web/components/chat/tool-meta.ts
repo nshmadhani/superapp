@@ -47,6 +47,13 @@ const TOOLS: Record<string, ToolMeta> = {
     description: "Compare yield opportunities",
     Icon: TrendingUp,
   },
+  get_price_history: {
+    id: "get_price_history",
+    label: "Price history",
+    verb: "Loading price history",
+    description: "OHLCV and historical closes",
+    Icon: TrendingUp,
+  },
   ask_user: {
     id: "ask_user",
     label: "Clarify",
