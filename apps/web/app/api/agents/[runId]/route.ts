@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { agentRunStore } from "@cipher/agent-jobs";
+import { agentRunStore, toPublicAgentRun } from "@cipher/agent-jobs";
 
 type Ctx = { params: Promise<{ runId: string }> };
 
@@ -11,7 +11,7 @@ export async function GET(_req: Request, ctx: Ctx) {
     if (!run || run.userId !== userId) {
       return Response.json({ error: "not_found" }, { status: 404 });
     }
-    return Response.json({ run });
+    return Response.json({ run: toPublicAgentRun(run) });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: "unauthorized" }, { status: 401 });

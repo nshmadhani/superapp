@@ -1,10 +1,12 @@
 "use client";
 
+import { ErvoLogo } from "@/components/ervo-logo";
+
 const SUGGESTIONS = [
   "Bridge 0.4 ETH to Base then lend on Morpho",
-  "Set up a weekly DCA — $50 of ETH",
+  "Create an agent to monitor Morpho USDC APY for 6 hours",
+  "Create a funded DCA agent — $50 ETH weekly",
   "Technical analysis on ETH — long or short?",
-  "Research Uniswap DAO recent governance",
 ];
 
 export function ChatEmptyState({
@@ -20,12 +22,13 @@ export function ChatEmptyState({
         denser ? "h-[40vh]" : "h-[50vh]"
       }`}
     >
+      <ErvoLogo size="xl" className="size-16 object-contain" priority />
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
-        Cipher
+        Ervo
       </h1>
       <p className="max-w-sm text-sm text-zinc-500">
-        Swap, bridge, and lend in one plan — or spawn an autonomous agent with
-        its own wallet. Watch tools run as Cipher works.
+        Research, move money, and run agents across your wallets. All in one
+        place.
       </p>
       {onSuggest && (
         <div className="mt-2 flex max-w-md flex-wrap justify-center gap-2">

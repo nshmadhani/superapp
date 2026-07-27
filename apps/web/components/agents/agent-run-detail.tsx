@@ -7,15 +7,16 @@ import {
   Bot,
   CircleDot,
   Loader2,
-  MessageSquare,
   Wallet,
 } from "lucide-react";
 import type {
+  AgentArtifact,
   AgentRun,
   DaoArtifact,
   DcaArtifact,
+  GeneralArtifact,
   TaArtifact,
-} from "@cipher/agent-jobs";
+} from "@cipher/agent-jobs/types";
 import { PriceChart } from "./price-chart";
 
 function statusTone(status: string) {
@@ -49,12 +50,14 @@ function agentKindTitle(type: AgentRun["type"]) {
   if (type === "dca") return "DCA";
   if (type === "ta") return "Technical analysis";
   if (type === "dao_research") return "DAO research";
-  return type;
+  if (type === "general" || !type) return "Agent";
+  return String(type);
 }
 
 function guardRailsFromRun(run: AgentRun): Array<{ label: string; value: string }> {
   const p = run.policy ?? {};
-  if (run.type === "dca") {
+  const preset = String(p.preset ?? run.type);
+  if (preset === "dca") {
     return [
       {
         label: "Buy size",
@@ -64,22 +67,34 @@ function guardRailsFromRun(run: AgentRun): Array<{ label: string; value: string 
       { label: "Mode", value: "One-shot schedule (confirm before live buys)" },
     ];
   }
-  if (run.type === "ta") {
+  if (preset === "ta") {
     return [
       { label: "Symbol", value: String(p.symbol ?? "ETH") },
       { label: "Interval", value: String(p.interval ?? "1d") },
       { label: "Mode", value: "Read-only analysis · no orders" },
     ];
   }
+  if (preset === "dao_research") {
+    return [
+      { label: "Topic", value: String(p.topic ?? run.goal) },
+      { label: "Mode", value: "Research brief · citations required" },
+    ];
+  }
   return [
-    { label: "Topic", value: String(p.topic ?? run.goal) },
-    { label: "Mode", value: "Research brief · citations required" },
+    { label: "Goal", value: run.goal.slice(0, 80) },
+    {
+      label: "Wallet",
+      value: run.wallet ? `${run.wallet.source} · optional` : "None (research/monitor)",
+    },
+    { label: "Mode", value: "Long-running autonomous job" },
   ];
 }
 
 export function AgentRunDetail({ runId }: { runId: string }) {
   const [run, setRun] = useState<AgentRun | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stopping, setStopping] = useState(false);
+  const [reclaimNote, setReclaimNote] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const res = await fetch(`/api/agents/${runId}`);
@@ -103,6 +118,44 @@ export function AgentRunDetail({ runId }: { runId: string }) {
     run?.status === "running" ||
     run?.status === "needs_confirm";
 
+  const canStop =
+    run && run.status !== "cancelled";
+
+  async function stopAndDestroy() {
+    setStopping(true);
+    setReclaimNote(null);
+    try {
+      const res = await fetch(`/api/agents/${runId}/cancel`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "stop_failed");
+      if (data.run) setRun(data.run as AgentRun);
+      const r = data.reclaim as
+        | { status: string; txs?: Array<{ chainId: number; hash: string }>; error?: string }
+        | undefined;
+      if (r?.status === "reclaimed" || r?.status === "partial") {
+        setReclaimNote(
+          `Stopped. Reclaimed funds${r.txs?.length ? ` (${r.txs.length} tx)` : ""}.`,
+        );
+      } else if (r?.status === "skipped_zero_balance") {
+        setReclaimNote("Stopped. Agent wallet had nothing to reclaim.");
+      } else if (r?.status === "skipped_no_destination") {
+        setReclaimNote(
+          "Stopped. No Turnkey EVM wallet to reclaim into — key kept until you add one.",
+        );
+      } else if (r?.status === "skipped_no_wallet") {
+        setReclaimNote("Stopped.");
+      } else if (r?.error) {
+        setReclaimNote(`Stopped. Reclaim issue: ${r.error}`);
+      } else {
+        setReclaimNote("Stopped.");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "stop_failed");
+    } finally {
+      setStopping(false);
+    }
+  }
+
   const rails = useMemo(
     () => (run ? guardRailsFromRun(run) : []),
     [run],
@@ -112,7 +165,7 @@ export function AgentRunDetail({ runId }: { runId: string }) {
     <div className="cipher-scroll h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8">
         <Link
-          href="/agents"
+          href="/app/agents"
           className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300"
         >
           <ArrowLeft className="size-3.5" />
@@ -143,13 +196,19 @@ export function AgentRunDetail({ runId }: { runId: string }) {
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href="/"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
-                >
-                  <MessageSquare className="size-3.5" />
-                  Open chat
-                </Link>
+                {(canStop || run.status === "running" || run.wallet) && (
+                  <button
+                    type="button"
+                    disabled={stopping || run.status === "cancelled"}
+                    onClick={() => void stopAndDestroy()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-red-900/60 bg-red-950/40 px-2.5 py-1.5 text-xs text-red-200 hover:border-red-700 disabled:opacity-50"
+                  >
+                    {stopping ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : null}
+                    Stop / Destroy
+                  </button>
+                )}
                 <span
                   className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide ${statusTone(run.status)}`}
                 >
@@ -163,12 +222,20 @@ export function AgentRunDetail({ runId }: { runId: string }) {
               </div>
             </header>
 
+            {reclaimNote && (
+              <p className="text-sm text-zinc-400">{reclaimNote}</p>
+            )}
+
             <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
               <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600">
                 What you asked
               </p>
               <p className="mt-2 text-sm leading-relaxed text-zinc-200">
                 {run.goal}
+              </p>
+              <p className="mt-2 text-xs text-zinc-600">
+                Agents are not chat threads — use Stop / Destroy to halt and
+                reclaim funds.
               </p>
             </section>
 
@@ -179,15 +246,13 @@ export function AgentRunDetail({ runId }: { runId: string }) {
                 </p>
                 <div className="flex items-start gap-2">
                   <Wallet className="mt-0.5 size-4 text-zinc-500" />
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-sm text-zinc-100">{run.wallet.label}</p>
-                    <p className="font-mono text-xs text-zinc-500">
-                      {shortAddr(run.wallet.address)} ·{" "}
-                      {run.wallet.chainFamily === "solana" ? "Solana" : "EVM"}
+                    <p className="break-all font-mono text-xs text-zinc-400">
+                      {run.wallet.address}
                     </p>
                     <p className="mt-1 text-xs text-zinc-600">
-                      Dedicated wallet for this agent — buys and lends run from
-                      here.
+                      Ephemeral key stored encrypted — reclaim on destroy.
                     </p>
                   </div>
                 </div>
@@ -213,11 +278,11 @@ export function AgentRunDetail({ runId }: { runId: string }) {
                   Allowed chains
                 </p>
                 <ul className="flex flex-wrap gap-2">
-                  {(run.type === "dca"
+                  {(String(run.policy?.preset ?? run.type) === "dca"
                     ? ["Base", "Ethereum"]
-                    : run.type === "ta"
+                    : String(run.policy?.preset ?? run.type) === "ta"
                       ? ["Binance public · spot"]
-                      : ["Open web"]
+                      : ["Open web", "E2B sandbox"]
                   ).map((c) => (
                     <li
                       key={c}
@@ -286,14 +351,36 @@ export function AgentRunDetail({ runId }: { runId: string }) {
   );
 }
 
-function ArtifactView({
-  artifact,
-}: {
-  artifact: DcaArtifact | TaArtifact | DaoArtifact;
-}) {
+function ArtifactView({ artifact }: { artifact: AgentArtifact }) {
   if (artifact.kind === "dca") return <DcaView a={artifact} />;
   if (artifact.kind === "ta") return <TaView a={artifact} />;
-  return <DaoView a={artifact} />;
+  if (artifact.kind === "dao_research") return <DaoView a={artifact} />;
+  return <GeneralView a={artifact} />;
+}
+
+function GeneralView({ a }: { a: GeneralArtifact }) {
+  return (
+    <section className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <h2 className="text-sm font-medium text-zinc-100">Result</h2>
+      <p className="text-sm text-zinc-400">{a.summary}</p>
+      <ul className="list-disc space-y-1 pl-5 text-sm text-zinc-300">
+        {a.bullets.map((b) => (
+          <li key={b.slice(0, 48)}>{b}</li>
+        ))}
+      </ul>
+      {a.citations && a.citations.length > 0 && (
+        <ul className="space-y-1 text-xs text-sky-400">
+          {a.citations.map((c) => (
+            <li key={c.url}>
+              <a href={c.url} target="_blank" rel="noreferrer" className="hover:underline">
+                {c.title}
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
 
 function DcaView({ a }: { a: DcaArtifact }) {

@@ -1,5 +1,3 @@
-export type AgentType = "dca" | "ta" | "dao_research";
-
 export type AgentRunStatus =
   | "queued"
   | "running"
@@ -20,14 +18,24 @@ export type AgentStep = {
 
 export type AgentArtifactSource = "live" | "fallback";
 
-/** Dedicated Turnkey wallet owned by this agent run (not the user's main wallet). */
+/**
+ * Optional agent wallet. Ephemeral = server-held key for this run only.
+ * `privateKey` is server-only and must never be returned to the client.
+ */
 export type AgentWallet = {
-  cipherWalletId: string;
   address: string;
   chainFamily: "evm" | "solana";
-  turnkeyWalletId?: string;
   label: string;
+  source: "ephemeral";
+  /** Server-only signing material — strip before API responses. */
+  privateKey?: `0x${string}`;
+  /** @deprecated legacy Turnkey fields */
+  cipherWalletId?: string;
+  turnkeyWalletId?: string;
 };
+
+/** @deprecated Prefer freeform agents; kept for preset routing / old runs. */
+export type AgentType = "general" | "dca" | "ta" | "dao_research" | (string & {});
 
 export type DcaArtifact = {
   kind: "dca";
@@ -37,7 +45,6 @@ export type DcaArtifact = {
   nextRunAt: string;
   legs: Array<{ date: string; amountUsd: number }>;
   summary: string;
-  /** Agent's dedicated wallet that would execute the DCA buys. */
   walletAddress?: string;
   walletLabel?: string;
 };
@@ -68,11 +75,24 @@ export type DaoArtifact = {
   walletAddress?: string;
 };
 
-export type AgentArtifact = DcaArtifact | TaArtifact | DaoArtifact;
+export type GeneralArtifact = {
+  kind: "general";
+  summary: string;
+  bullets: string[];
+  citations?: Array<{ title: string; url: string }>;
+  walletAddress?: string;
+};
+
+export type AgentArtifact =
+  | DcaArtifact
+  | TaArtifact
+  | DaoArtifact
+  | GeneralArtifact;
 
 export type AgentRun = {
   id: string;
   userId: string;
+  /** Display / preset hint — not a closed product enum. */
   type: AgentType;
   goal: string;
   policy: Record<string, unknown>;
@@ -80,7 +100,7 @@ export type AgentRun = {
   steps: AgentStep[];
   artifact: AgentArtifact | null;
   source: AgentArtifactSource | null;
-  /** Isolated wallet for this agent — provisioned at create. */
+  /** Optional — only when the agent needs to hold/sign funds. */
   wallet: AgentWallet | null;
   sandboxId?: string;
   error?: string;
@@ -91,8 +111,22 @@ export type AgentRun = {
 
 export type CreateAgentInput = {
   userId: string;
-  type: AgentType;
   goal: string;
+  /** Optional preset hint (`dca` | `ta` | `dao_research`) or freeform label. */
+  type?: AgentType;
   policy?: Record<string, unknown>;
   wallet?: AgentWallet | null;
+  /** If true, create an ephemeral EVM wallet at start (money agents). */
+  withWallet?: boolean;
 };
+
+/** Public shape of a run (no private keys). */
+export type PublicAgentRun = Omit<AgentRun, "wallet"> & {
+  wallet: Omit<AgentWallet, "privateKey"> | null;
+};
+
+export function toPublicAgentRun(run: AgentRun): PublicAgentRun {
+  if (!run.wallet) return { ...run, wallet: null };
+  const { privateKey: _pk, ...safe } = run.wallet;
+  return { ...run, wallet: safe };
+}

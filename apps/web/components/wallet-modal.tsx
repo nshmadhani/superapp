@@ -12,7 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
-import { syncTurnkeyWalletsToCipher } from "@/lib/sync-wallets";
+import { CIPHER_WALLETS_SYNCED_EVENT, syncTurnkeyWalletsToCipher } from "@/lib/sync-wallets";
 import { waitForCipherSession } from "@/lib/cipher-session";
 import {
   addressFormatForChain,
@@ -93,6 +93,40 @@ export function WalletModal({
 
   if (!open || yieldToTurnkey) return null;
 
+  async function persistConnectedProviders() {
+    const providers = walletProviders ?? [];
+    for (const provider of providers) {
+      const addrs = provider.connectedAddresses ?? [];
+      const name =
+        cleanWalletName(
+          (provider as { name?: string }).name ??
+            (provider as { providerName?: string }).providerName ??
+            "Connected",
+        ) || "Connected";
+      for (const address of addrs) {
+        const chainFamily = chainFamilyForAddress(address);
+        if (!chainFamily) continue;
+        const res = await fetch("/api/wallets", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "connect_external",
+            address,
+            chainFamily,
+            label: name,
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          console.error("provider wallet upsert failed", address, body);
+        }
+      }
+    }
+    if (providers.some((p) => (p.connectedAddresses ?? []).length > 0)) {
+      window.dispatchEvent(new CustomEvent(CIPHER_WALLETS_SYNCED_EVENT));
+    }
+  }
+
   async function afterWalletMutation(mode: "embedded" | "connected") {
     await waitForCipherSession(5_000);
     // Connected path always hits Turnkey fresh — throttle cache often lags Phantom.
@@ -140,6 +174,11 @@ export function WalletModal({
       }
     }
     await syncTurnkeyWalletsToCipher(merged as never, { mode });
+    // Belt-and-suspenders: Turnkey providers sometimes expose addresses
+    // before they show up as source:"connected" wallets.
+    if (mode === "connected") {
+      await persistConnectedProviders();
+    }
   }
 
   async function onCreateEmbedded(e: FormEvent) {

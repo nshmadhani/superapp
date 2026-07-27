@@ -16,3 +16,11 @@ export {
   deleteWalletByAddress,
   ensureUser,
 } from "./wallets";
+export {
+  saveAgentWallet,
+  getAgentWalletForRun,
+  getAgentWalletPrivateKey,
+  markAgentWalletDestroyed,
+  type AgentWalletRow,
+} from "./agent-wallets";
+export { encryptPrivateKey, decryptPrivateKey } from "./crypto";

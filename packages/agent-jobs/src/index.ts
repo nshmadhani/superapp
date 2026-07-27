@@ -9,13 +9,17 @@ export type {
   CreateAgentInput,
   DaoArtifact,
   DcaArtifact,
+  GeneralArtifact,
+  PublicAgentRun,
   TaArtifact,
 } from "./types";
+export { toPublicAgentRun } from "./types";
 export { agentRunStore } from "./store";
 export { kickAgentRun, executeAgentRun } from "./worker";
-export { e2bConfigured } from "./e2b";
 export { fetchBinanceKlines, resolveBinanceSymbol } from "./market-data";
 export { agentWalletLabel } from "./labels";
+export { createEphemeralAgentWallet } from "./ephemeral-wallet";
+export { e2bConfigured, runInE2b, parseJsonFromE2bText } from "./e2b";
 
 import { agentRunStore } from "./store";
 import { kickAgentRun } from "./worker";

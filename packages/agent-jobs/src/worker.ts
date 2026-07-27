@@ -2,7 +2,8 @@ import { agentRunStore } from "./store";
 import { runDcaJob } from "./runners/dca";
 import { runTaJob } from "./runners/ta";
 import { runDaoJob } from "./runners/dao";
-import type { AgentRun } from "./types";
+import { runGeneralJob } from "./runners/general";
+import type { AgentArtifact, AgentRun } from "./types";
 
 const inflight = new Set<string>();
 
@@ -12,6 +13,12 @@ export function kickAgentRun(runId: string): void {
   void executeAgentRun(runId).finally(() => inflight.delete(runId));
 }
 
+function presetOf(run: AgentRun): string {
+  const fromPolicy = run.policy?.preset;
+  if (typeof fromPolicy === "string" && fromPolicy.trim()) return fromPolicy;
+  return String(run.type || "general");
+}
+
 export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
   const run = agentRunStore.get(runId);
   if (!run) return null;
@@ -19,21 +26,19 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
 
   agentRunStore.update(runId, { status: "running", error: undefined });
 
-  const walletStepId = crypto.randomUUID();
-  agentRunStore.appendStep(runId, {
-    id: walletStepId,
-    label: run.wallet
-      ? `Use agent wallet ${run.wallet.label}`
-      : "Agent wallet missing",
-    status: "running",
-    detail: run.wallet?.address,
-  });
-  agentRunStore.patchStep(runId, walletStepId, {
-    status: run.wallet ? "done" : "error",
-    detail: run.wallet
-      ? `${run.wallet.address} (${run.wallet.chainFamily})`
-      : "no_wallet",
-  });
+  if (run.wallet) {
+    const walletStepId = crypto.randomUUID();
+    agentRunStore.appendStep(runId, {
+      id: walletStepId,
+      label: `Agent wallet ${run.wallet.label}`,
+      status: "running",
+      detail: run.wallet.address,
+    });
+    agentRunStore.patchStep(runId, walletStepId, {
+      status: "done",
+      detail: `${run.wallet.address} (${run.wallet.source})`,
+    });
+  }
 
   const prepId = crypto.randomUUID();
   agentRunStore.appendStep(runId, {
@@ -43,13 +48,16 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
   });
   agentRunStore.patchStep(runId, prepId, { status: "done" });
 
+  const preset = presetOf(run);
   const workId = crypto.randomUUID();
   const workLabel =
-    run.type === "dca"
+    preset === "dca"
       ? "Build DCA schedule in E2B"
-      : run.type === "ta"
+      : preset === "ta"
         ? "Fetch OHLCV + analyze in E2B"
-        : "Research DAO + summarize in E2B";
+        : preset === "dao_research"
+          ? "Research DAO + summarize in E2B"
+          : "Run autonomous job";
   agentRunStore.appendStep(runId, {
     id: workId,
     label: workLabel,
@@ -59,11 +67,13 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
   try {
     const latest = agentRunStore.get(runId)!;
     const result =
-      latest.type === "dca"
+      preset === "dca"
         ? await runDcaJob(latest.goal, latest.policy)
-        : latest.type === "ta"
+        : preset === "ta"
           ? await runTaJob(latest.goal, latest.policy)
-          : await runDaoJob(latest.goal, latest.policy);
+          : preset === "dao_research"
+            ? await runDaoJob(latest.goal, latest.policy)
+            : await runGeneralJob(latest.goal, latest.policy);
 
     const artifact = {
       ...result.artifact,
@@ -71,7 +81,7 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
       ...(result.artifact.kind === "dca"
         ? { walletLabel: latest.wallet?.label }
         : {}),
-    };
+    } as AgentArtifact;
 
     agentRunStore.patchStep(runId, workId, {
       status: "done",

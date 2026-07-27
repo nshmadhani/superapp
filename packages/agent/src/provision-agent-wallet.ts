@@ -7,8 +7,8 @@ import {
 import { store } from "./store";
 
 /**
- * Server-side dedicated Turnkey EVM wallet for an agent run.
- * Tries the user's sub-org first (signable in session), then parent org.
+ * @deprecated Prefer createEphemeralAgentWallet from @cipher/agent-jobs.
+ * Kept for emergency/legacy Turnkey provisioning.
  */
 export async function provisionAgentWallet(opts: {
   userId: string;
@@ -17,7 +17,7 @@ export async function provisionAgentWallet(opts: {
   turnkeySuborgId?: string | null;
 }): Promise<AgentWallet> {
   const short = opts.runId.replace(/-/g, "").slice(0, 6);
-  const label = agentWalletLabel(opts.type, short);
+  const label = agentWalletLabel(String(opts.type), short);
 
   let created: Awaited<ReturnType<typeof createEvmWallet>>;
   try {
@@ -40,10 +40,11 @@ export async function provisionAgentWallet(opts: {
   });
 
   return {
-    cipherWalletId: wallet.id,
     address: wallet.address,
     chainFamily: "evm",
-    turnkeyWalletId: created.turnkeyWalletId,
     label,
+    source: "ephemeral",
+    cipherWalletId: wallet.id,
+    turnkeyWalletId: created.turnkeyWalletId,
   };
 }

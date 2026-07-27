@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     "@cipher/turnkey",
     "@cipher/rpc",
   ],
-  serverExternalPackages: ["@turnkey/sdk-server", "@e2b/code-interpreter"],
+  serverExternalPackages: ["@turnkey/sdk-server", "@e2b/code-interpreter", "viem"],
 };
 
 export default nextConfig;

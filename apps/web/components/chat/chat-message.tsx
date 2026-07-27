@@ -31,6 +31,7 @@ export function ChatMessage({
   onRegenerate,
   onClarify,
   onTxOutcome,
+  submittedPlanIds,
 }: {
   message: UIMessage;
   isLastAssistant?: boolean;
@@ -38,6 +39,7 @@ export function ChatMessage({
   onRegenerate?: () => void;
   onClarify?: (text: string) => void;
   onTxOutcome?: (outcome: TxReviewOutcome) => void;
+  submittedPlanIds?: Set<string>;
 }) {
   const steps = extractAgentSteps(message.parts);
   const reviews = extractPlanReviews(message.parts);
@@ -107,6 +109,7 @@ export function ChatMessage({
         <TxReviewCard
           key={`${message.id}-plan-${idx}`}
           review={r}
+          alreadySubmitted={submittedPlanIds?.has(r.planId)}
           onOutcome={(outcome) => onTxOutcome?.(outcome)}
         />
       ))}

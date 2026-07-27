@@ -1,53 +1,36 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { createDb } from "@cipher/db";
-import { provisionAgentWallet } from "@cipher/agent";
 import {
   agentRunStore,
   createAgentRun,
+  createEphemeralAgentWallet,
   startAgentRun,
-  type AgentType,
+  toPublicAgentRun,
   type AgentWallet,
 } from "@cipher/agent-jobs";
-
-const TYPES = new Set<AgentType>(["dca", "ta", "dao_research"]);
+import { createDb, saveAgentWallet } from "@cipher/db";
 
 function parseWallet(raw: unknown): AgentWallet | null {
   if (!raw || typeof raw !== "object") return null;
   const w = raw as Record<string, unknown>;
-  const cipherWalletId = String(w.cipherWalletId ?? "");
   const address = String(w.address ?? "");
-  const chainFamily = w.chainFamily === "solana" ? "solana" : "evm";
   const label = String(w.label ?? "Agent wallet");
-  if (!cipherWalletId || !address) return null;
+  if (!address) return null;
+  // Never accept client-supplied private keys.
   return {
-    cipherWalletId,
     address,
-    chainFamily,
+    chainFamily: w.chainFamily === "solana" ? "solana" : "evm",
     label,
-    turnkeyWalletId: w.turnkeyWalletId
-      ? String(w.turnkeyWalletId)
-      : undefined,
+    source: "ephemeral",
+    cipherWalletId: w.cipherWalletId ? String(w.cipherWalletId) : undefined,
+    turnkeyWalletId: w.turnkeyWalletId ? String(w.turnkeyWalletId) : undefined,
   };
-}
-
-async function userTurnkeySuborg(userId: string): Promise<string | null> {
-  try {
-    const db = createDb();
-    const { data } = await db
-      .from("users")
-      .select("turnkey_suborg_id")
-      .eq("id", userId)
-      .maybeSingle();
-    return (data?.turnkey_suborg_id as string | null) ?? null;
-  } catch {
-    return null;
-  }
 }
 
 export async function GET() {
   try {
     const userId = await requireAuthUserId();
-    return Response.json({ runs: agentRunStore.list(userId) });
+    const runs = agentRunStore.list(userId).map(toPublicAgentRun);
+    return Response.json({ runs });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -63,43 +46,57 @@ export async function POST(req: Request) {
   try {
     const userId = await requireAuthUserId();
     const body = await req.json().catch(() => ({}));
-    const type = body.type as AgentType;
     const goal = String(body.goal ?? "").trim();
+    const type = body.type ? String(body.type).trim() : "general";
+    const withWallet = body.withWallet === true;
     const policy =
       body.policy && typeof body.policy === "object"
         ? (body.policy as Record<string, unknown>)
         : {};
 
-    if (!TYPES.has(type)) {
-      return Response.json({ error: "invalid_type" }, { status: 400 });
-    }
     if (goal.length < 3) {
       return Response.json({ error: "goal_required" }, { status: 400 });
     }
 
     let wallet = parseWallet(body.wallet);
+    let privateKey: string | undefined;
+    if (!wallet && withWallet) {
+      const created = createEphemeralAgentWallet();
+      wallet = {
+        address: created.address,
+        chainFamily: "evm",
+        label: created.label,
+        source: "ephemeral",
+      };
+      privateKey = created.privateKey;
+    }
+
     const run = createAgentRun({
       userId,
       type,
       goal,
       policy,
       wallet,
+      withWallet: false,
     });
 
-    if (!wallet) {
-      const suborg = await userTurnkeySuborg(userId);
-      wallet = await provisionAgentWallet({
+    if (privateKey && wallet) {
+      const db = createDb();
+      await saveAgentWallet(db, {
         userId,
-        type,
-        runId: run.id,
-        turnkeySuborgId: suborg,
+        agentRunId: run.id,
+        address: wallet.address,
+        privateKey,
+        label: wallet.label,
       });
-      agentRunStore.setWallet(run.id, wallet);
     }
 
     startAgentRun(run.id);
     const started = agentRunStore.get(run.id);
-    return Response.json({ run: started }, { status: 201 });
+    return Response.json(
+      { run: started ? toPublicAgentRun(started) : null },
+      { status: 201 },
+    );
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: "unauthorized" }, { status: 401 });

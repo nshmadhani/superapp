@@ -26,7 +26,13 @@ type Position = {
   walletId?: string;
   walletLabel?: string;
   walletAddress?: string;
+  kind?: "wallet" | "defi";
+  protocol?: string | null;
+  positionType?: string | null;
 };
+
+/** Positions below this USD value are hidden when "Hide dust" is on. */
+const DUST_USD_MIN = 1;
 
 type Overview = {
   totalValueUsd: number;
@@ -268,6 +274,15 @@ export function DashboardPortfolio() {
   const [chainFilter, setChainFilter] = useState<string>("all");
   const [hideDust, setHideDust] = useState(true);
 
+  const walletsKey = useMemo(
+    () =>
+      wallets
+        .map((w) => `${w.id}:${w.address}`)
+        .sort()
+        .join("|"),
+    [wallets],
+  );
+
   const loadWallets = useCallback(async () => {
     const res = await fetch("/api/wallets");
     if (!res.ok) return;
@@ -281,47 +296,55 @@ export function DashboardPortfolio() {
     });
   }, []);
 
+  const loadPortfolio = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (selected === OVERVIEW) {
+        const res = await fetch("/api/portfolio?scope=all");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load overview");
+        setOverview(data as Overview);
+        setSnap(null);
+      } else {
+        const res = await fetch(
+          `/api/portfolio?address=${encodeURIComponent(selected)}`,
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
+        setSnap(data as SingleSnap);
+        setOverview(null);
+      }
+    } catch (err) {
+      setOverview(null);
+      setSnap(null);
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [selected]);
+
   useEffect(() => {
     void loadWallets();
     const onAuthed = () => void loadWallets();
-    const onSynced = () => void loadWallets();
+    const onSynced = () => {
+      void (async () => {
+        await loadWallets();
+        // Force overview reload even when selected stays on Overview.
+        await loadPortfolio();
+      })();
+    };
     window.addEventListener(CIPHER_AUTHED_EVENT, onAuthed);
     window.addEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
     return () => {
       window.removeEventListener(CIPHER_AUTHED_EVENT, onAuthed);
       window.removeEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
     };
-  }, [loadWallets]);
+  }, [loadWallets, loadPortfolio]);
 
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        if (selected === OVERVIEW) {
-          const res = await fetch("/api/portfolio?scope=all");
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Failed to load overview");
-          setOverview(data as Overview);
-          setSnap(null);
-        } else {
-          const res = await fetch(
-            `/api/portfolio?address=${encodeURIComponent(selected)}`,
-          );
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
-          setSnap(data as SingleSnap);
-          setOverview(null);
-        }
-      } catch (err) {
-        setOverview(null);
-        setSnap(null);
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [selected]);
+    void loadPortfolio();
+  }, [loadPortfolio, walletsKey]);
 
   const activeWallet = wallets.find((w) => addressesMatch(w.address, selected));
   const title =
@@ -346,7 +369,7 @@ export function DashboardPortfolio() {
       rows = rows.filter((p) => p.chainId === chainFilter);
     }
     if (hideDust) {
-      rows = rows.filter((p) => (p.valueUsd ?? 0) >= 50);
+      rows = rows.filter((p) => (p.valueUsd ?? 0) >= DUST_USD_MIN);
     }
     return rows;
   }, [rawPositions, chainFilter, hideDust]);
@@ -394,7 +417,55 @@ export function DashboardPortfolio() {
   const equity = useMemo(() => seedEquitySeries(Math.max(total, 1)), [total]);
 
   const walletCount =
-    selected === OVERVIEW ? (overview?.wallets.length ?? wallets.length) : 1;
+    selected === OVERVIEW
+      ? Math.max(overview?.wallets.length ?? 0, wallets.length)
+      : 1;
+
+  // Prefer live portfolio rows; fall back to wallet list so a just-linked
+  // Phantom still appears before the next Zerion pass finishes.
+  const overviewCards = useMemo(() => {
+    if (selected !== OVERVIEW) return [];
+    const byAddr = new Map<
+      string,
+      {
+        walletId: string;
+        address: string;
+        label?: string;
+        chainFamily: "evm" | "solana";
+        source: string;
+        totalValueUsd: number;
+        error?: string;
+      }
+    >();
+    for (const w of wallets) {
+      const key = w.address.startsWith("0x")
+        ? w.address.toLowerCase()
+        : w.address;
+      byAddr.set(key, {
+        walletId: w.id,
+        address: w.address,
+        label: w.label,
+        chainFamily: w.chainFamily === "solana" ? "solana" : "evm",
+        source: w.source,
+        totalValueUsd: 0,
+      });
+    }
+    for (const w of overview?.wallets ?? []) {
+      const key = w.address.startsWith("0x")
+        ? w.address.toLowerCase()
+        : w.address;
+      byAddr.set(key, {
+        walletId: w.walletId,
+        address: w.address,
+        label: w.label,
+        chainFamily: w.chainFamily,
+        source: w.source,
+        totalValueUsd: w.totalValueUsd,
+        error: w.error,
+      });
+    }
+    return [...byAddr.values()];
+  }, [selected, wallets, overview?.wallets]);
 
   return (
     <div className="cipher-scroll h-full overflow-y-auto">
@@ -508,9 +579,9 @@ export function DashboardPortfolio() {
                 </select>
               </label>
 
-              {selected === OVERVIEW && overview && overview.wallets.length > 0 && (
+              {selected === OVERVIEW && overviewCards.length > 0 && (
                 <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {overview.wallets.map((w) => (
+                  {overviewCards.map((w) => (
                     <button
                       key={w.walletId}
                       type="button"
@@ -534,9 +605,17 @@ export function DashboardPortfolio() {
                       <p className="mt-1 text-lg font-semibold text-zinc-100">
                         {usd(w.totalValueUsd)}
                       </p>
-                      <p className="mt-1 font-mono text-[10px] text-zinc-600">
-                        {shortAddr(w.address)}
-                      </p>
+                      {w.error ? (
+                        <p className="mt-1 text-[10px] text-amber-400/90">
+                          {/429|throttl/i.test(w.error)
+                            ? "Balance refresh rate-limited — retry shortly"
+                            : "Balance fetch failed"}
+                        </p>
+                      ) : (
+                        <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                          {shortAddr(w.address)}
+                        </p>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -565,7 +644,7 @@ export function DashboardPortfolio() {
                     onChange={(e) => setHideDust(e.target.checked)}
                     className="rounded border-zinc-700"
                   />
-                  Hide dust (&lt;$50)
+                  {`Hide dust (<$${DUST_USD_MIN})`}
                 </label>
               </div>
 
@@ -610,7 +689,14 @@ export function DashboardPortfolio() {
                             <span className="inline-flex items-center gap-2">
                               <TokenIcon symbol={p.symbol} size={20} />
                               <span>
-                                {p.symbol}
+                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                  {p.symbol}
+                                  {p.kind === "defi" && (
+                                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400/90">
+                                      {p.protocol ?? "DeFi"}
+                                    </span>
+                                  )}
+                                </span>
                                 <span className="ml-2 text-zinc-500">
                                   {p.name}
                                 </span>
@@ -680,7 +766,8 @@ export function DashboardPortfolio() {
                         <ul className="ml-2 space-y-1.5 border-l border-zinc-800 pl-3">
                           {w.positions
                             .filter(
-                              (p) => !hideDust || (p.valueUsd ?? 0) >= 50,
+                              (p) =>
+                                !hideDust || (p.valueUsd ?? 0) >= DUST_USD_MIN,
                             )
                             .filter(
                               (p) =>

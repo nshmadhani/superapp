@@ -1,18 +1,60 @@
 "use client";
 
-import { isLifiSolanaChain, type PlanStepExecution } from "@cipher/core";
+import {
+  buildAgentLifiStatus,
+  type AgentLifiStatus,
+} from "@cipher/adapters";
+import { isLifiEvmChain, isLifiSolanaChain, type PlanStepExecution } from "@cipher/core";
 import { useTurnkey } from "@turnkey/react-wallet-kit";
 import { ExternalLink, Loader2, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   executeLifiAfterConfirm,
-  findWalletAccount,
+  resolveSignAccount,
+  waitForEvmReceipt,
 } from "@/lib/lifi-execute";
 import { encodeTransferSubmitted } from "@/lib/transfer-submitted";
 
 const SOLANA_RPC_URL =
   process.env.NEXT_PUBLIC_SOLANA_RPC_URL ??
   "https://api.mainnet-beta.solana.com";
+
+function formatCountdown(ms: number): string {
+  if (ms <= 0) return "0:00";
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function usePlanExpiry(expiresAt: string) {
+  const expiresMs = useMemo(() => {
+    const t = Date.parse(expiresAt);
+    return Number.isFinite(t) ? t : NaN;
+  }, [expiresAt]);
+
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!Number.isFinite(expiresMs)) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expiresMs]);
+
+  const remainingMs = Number.isFinite(expiresMs) ? expiresMs - now : 0;
+  const expired = Number.isFinite(expiresMs) ? remainingMs <= 0 : false;
+
+  return {
+    expired,
+    remainingMs: Math.max(0, remainingMs),
+    label: Number.isFinite(expiresMs)
+      ? expired
+        ? "Expired"
+        : formatCountdown(remainingMs)
+      : "—",
+  };
+}
 
 type PlanReview = {
   confirmId: string;
@@ -31,6 +73,10 @@ type PlanReview = {
       data: string;
       value: string;
       chainId: number;
+      gasLimit?: string;
+      gasPrice?: string;
+      maxFeePerGas?: string;
+      maxPriorityFeePerGas?: string;
       minBuyAmount?: string;
       displayRoute?: string;
       toolName?: string;
@@ -55,6 +101,8 @@ type PlanReview = {
     toAmount?: string;
     multiStep?: boolean;
     stepCount?: number;
+    /** True when Morpho approve+deposit with no LI.FI transfer. */
+    lendOnly?: boolean;
   };
   wallet: { address: string; id: string };
   wallets?: Record<string, { address: string; id: string }>;
@@ -118,12 +166,108 @@ function labelForLifiStatus(s: LifiUiStatus): string {
     case "PARTIAL":
       return "Partial";
     case "REFUNDED":
-      return "Refunded";
+      return "Refunded on source — bridge did not reach destination";
     case "INVALID":
       return "Invalid";
     default:
       return s === "idle" ? "—" : String(s);
   }
+}
+
+type LifiWatchSnapshot = {
+  status: LifiUiStatus;
+  terminalKind?: string;
+  rawStatus?: string;
+  receivingTxHash?: string;
+  sendingTxHash?: string;
+  substatus?: string;
+  substatusMessage?: string;
+  failReason?: string | null;
+  sendingChainId?: number | null;
+  receivingChainId?: number | null;
+  lifiExplorerLink?: string | null;
+  tool?: string;
+};
+
+function agentLifiFromWatch(
+  txHash: string,
+  snap: LifiWatchSnapshot | null | undefined,
+): AgentLifiStatus | undefined {
+  if (!snap) return undefined;
+  const terminalKind =
+    snap.terminalKind ??
+    (snap.status === "DONE"
+      ? "success"
+      : snap.status === "REFUNDED"
+        ? "refunded"
+        : snap.status === "FAILED"
+          ? "failed"
+          : snap.status === "PARTIAL"
+            ? "partial"
+            : snap.status === "PENDING" || snap.status === "NOT_FOUND"
+              ? "pending"
+              : "unknown");
+  return buildAgentLifiStatus({
+    txHash,
+    status: snap.status,
+    uiStatus: snap.status,
+    rawStatus: snap.rawStatus,
+    substatus: snap.substatus,
+    substatusMessage: snap.substatusMessage,
+    terminalKind,
+    tool: snap.tool,
+    failReason: snap.failReason,
+    sendingChainId: snap.sendingChainId,
+    receivingChainId: snap.receivingChainId,
+    sendingTxHash: snap.sendingTxHash ?? txHash,
+    receivingTxHash: snap.receivingTxHash,
+    lifiExplorerLink: snap.lifiExplorerLink,
+  });
+}
+
+async function fetchLifiStatusOnce(opts: {
+  txHash: string;
+  fromChain: number;
+  toChain: number;
+  bridgeTool?: string;
+}): Promise<LifiWatchSnapshot> {
+  const params = new URLSearchParams({
+    txHash: opts.txHash,
+    fromChain: String(opts.fromChain),
+    toChain: String(opts.toChain),
+  });
+  if (opts.bridgeTool) params.set("bridge", opts.bridgeTool);
+  const res = await fetch(`/api/lifi/status?${params}`);
+  const data = (await res.json()) as {
+    status?: string;
+    rawStatus?: string;
+    terminalKind?: string;
+    substatus?: string;
+    substatusMessage?: string;
+    failReason?: string | null;
+    receiving?: { txHash?: string; chainId?: number };
+    sending?: { txHash?: string; chainId?: number };
+    receivingChainId?: number | null;
+    sendingChainId?: number | null;
+    receivingTxHash?: string | null;
+    sendingTxHash?: string | null;
+    lifiExplorerLink?: string | null;
+    tool?: string;
+  };
+  return {
+    status: (data.status ?? "unknown") as LifiUiStatus,
+    terminalKind: data.terminalKind,
+    rawStatus: data.rawStatus,
+    receivingTxHash: data.receivingTxHash ?? data.receiving?.txHash,
+    sendingTxHash: data.sendingTxHash ?? data.sending?.txHash ?? opts.txHash,
+    substatus: data.substatus,
+    substatusMessage: data.substatusMessage,
+    failReason: data.failReason,
+    sendingChainId: data.sendingChainId ?? data.sending?.chainId ?? null,
+    receivingChainId: data.receivingChainId ?? data.receiving?.chainId ?? null,
+    lifiExplorerLink: data.lifiExplorerLink ?? null,
+    tool: data.tool,
+  };
 }
 
 async function waitForLifiDone(opts: {
@@ -133,43 +277,57 @@ async function waitForLifiDone(opts: {
   bridgeTool?: string;
   onStatus: (s: LifiUiStatus, receiving?: string) => void;
   timeoutMs?: number;
-}): Promise<boolean> {
+}): Promise<LifiWatchSnapshot & { ok: boolean }> {
   const deadline = Date.now() + (opts.timeoutMs ?? 180_000);
+  let last = await fetchLifiStatusOnce(opts).catch(() => null);
   while (Date.now() < deadline) {
-    const params = new URLSearchParams({
-      txHash: opts.txHash,
-      fromChain: String(opts.fromChain),
-      toChain: String(opts.toChain),
-    });
-    if (opts.bridgeTool) params.set("bridge", opts.bridgeTool);
     try {
-      const res = await fetch(`/api/lifi/status?${params}`);
-      const data = (await res.json()) as {
-        status?: string;
-        receiving?: { txHash?: string };
-      };
-      const st = (data.status ?? "unknown") as LifiUiStatus;
-      opts.onStatus(st, data.receiving?.txHash);
-      if (st === "DONE") return true;
-      if (st === "FAILED" || st === "REFUNDED") return false;
+      last = await fetchLifiStatusOnce(opts);
+      opts.onStatus(last.status, last.receivingTxHash);
+      if (last.status === "DONE") return { ok: true, ...last };
+      if (
+        last.status === "FAILED" ||
+        last.status === "REFUNDED" ||
+        last.status === "PARTIAL"
+      ) {
+        return { ok: false, ...last };
+      }
     } catch {
       opts.onStatus("unknown");
     }
     await new Promise((r) => setTimeout(r, 4000));
   }
-  return false;
+  return {
+    ok: false,
+    status: last?.status ?? "PENDING",
+    terminalKind: last?.terminalKind ?? "pending",
+    rawStatus: last?.rawStatus,
+    receivingTxHash: last?.receivingTxHash,
+    sendingTxHash: last?.sendingTxHash ?? opts.txHash,
+    substatus: last?.substatus,
+    substatusMessage: last?.substatusMessage,
+    failReason: last?.failReason,
+    sendingChainId: last?.sendingChainId,
+    receivingChainId: last?.receivingChainId,
+    lifiExplorerLink: last?.lifiExplorerLink,
+    tool: last?.tool,
+  };
 }
 
 export function TxReviewCard({
   review,
   onDismiss,
   onOutcome,
+  alreadySubmitted,
 }: {
   review: PlanReview;
   onDismiss?: () => void;
   onOutcome?: (outcome: TxReviewOutcome) => void;
+  /** Plan already has a transfer_submitted in chat — show read-only, no actions. */
+  alreadySubmitted?: boolean;
 }) {
-  const { handleSendTransaction, signTransaction, wallets } = useTurnkey();
+  const { signTransaction, wallets } = useTurnkey();
+  const expiry = usePlanExpiry(review.plan.expiresAt);
   const [status, setStatus] = useState<
     | "idle"
     | "confirming"
@@ -179,7 +337,7 @@ export function TxReviewCard({
     | "done"
     | "rejected"
     | "error"
-  >("idle");
+  >(alreadySubmitted ? "done" : "idle");
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [explorerUrl, setExplorerUrl] = useState<string | null>(null);
@@ -187,17 +345,27 @@ export function TxReviewCard({
   const [receivingTxHash, setReceivingTxHash] = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState(0);
   const [stepNotes, setStepNotes] = useState<string[]>([]);
+  const [stepTxs, setStepTxs] = useState<
+    Array<{ txHash: string; explorerUrl?: string }>
+  >([]);
+
+  useEffect(() => {
+    if (alreadySubmitted) setStatus("done");
+  }, [alreadySubmitted]);
 
   const q = review.quote;
   const utx = review.plan.unsignedTx;
   const fromChain = q.chainId;
   const toChain = q.toChainId ?? utx?.toChainId ?? fromChain;
   const cross = q.isCrossChain ?? utx?.isCrossChain ?? fromChain !== toChain;
-  const toolName = q.toolName ?? utx?.toolName ?? q.tool ?? "LI.FI";
+  const lendOnly = Boolean(q.lendOnly);
+  /** Raw bridge adapter id for LI.FI status API only — never a product brand. */
   const bridgeTool = q.tool ?? utx?.tool;
   const eta = q.executionDurationSec ?? utx?.executionDurationSec;
   const routeLabel = review.plan.summary ?? q.displayRoute;
-  const settled = status === "done" || status === "rejected";
+  const settled =
+    status === "done" || status === "rejected" || Boolean(alreadySubmitted);
+  const actionsLocked = settled || expiry.expired;
   const busy =
     status === "confirming" ||
     status === "signing" ||
@@ -219,11 +387,15 @@ export function TxReviewCard({
           chainId: fromChain,
           toChainId: toChain,
           tool: bridgeTool,
-          toolName,
+          toolName: utx?.toolName ?? q.toolName,
           isCrossChain: cross,
           minBuyAmount: q.minBuyAmount,
           displayRoute: routeLabel,
           executionDurationSec: eta,
+          gasLimit: utx?.gasLimit,
+          gasPrice: utx?.gasPrice,
+          maxFeePerGas: utx?.maxFeePerGas,
+          maxPriorityFeePerGas: utx?.maxPriorityFeePerGas,
         },
         lifiStep: review.plan.lifiStep,
         lifiRoute: review.plan.lifiRoute,
@@ -242,11 +414,30 @@ export function TxReviewCard({
     fromChain,
     toChain,
     bridgeTool,
-    toolName,
     eta,
   ]);
 
+  /** True when a leg is an actual LI.FI swap/bridge (not Morpho approve/lend). */
+  const hasLifiLeg = useMemo(() => {
+    if (lendOnly) return false;
+    return legs.some(
+      (l) =>
+        Boolean(l.lifiStep) ||
+        Boolean(l.waitForLifi) ||
+        l.kind === "swap" ||
+        l.kind === "bridge",
+    );
+  }, [legs, lendOnly]);
+
+  /** Cross-chain LI.FI only — same-chain swaps just need on-chain receipt. */
+  const needsLifiBridgeWatch = useMemo(
+    () => hasLifiLeg && (cross || legs.some((l) => Boolean(l.waitForLifi))),
+    [hasLifiLeg, cross, legs],
+  );
+
   useEffect(() => {
+    // Background LI.FI poll is only for cross-chain bridges after submit.
+    if (!needsLifiBridgeWatch) return;
     if (status !== "done" || !txHash || legs.length > 1) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -291,7 +482,15 @@ export function TxReviewCard({
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [status, txHash, fromChain, toChain, bridgeTool, legs.length]);
+  }, [
+    needsLifiBridgeWatch,
+    status,
+    txHash,
+    fromChain,
+    toChain,
+    bridgeTool,
+    legs.length,
+  ]);
 
   function resolveAddress(
     walletId: string,
@@ -306,9 +505,15 @@ export function TxReviewCard({
   }
 
   async function onConfirm() {
+    if (expiry.expired) {
+      setError("This plan has expired. Ask for a new quote.");
+      setStatus("error");
+      return;
+    }
     setError(null);
     setStatus("confirming");
     setStepNotes([]);
+    setStepTxs([]);
     try {
       const res = await fetch(`/api/plans/${review.planId}/confirm`, {
         method: "POST",
@@ -333,6 +538,16 @@ export function TxReviewCard({
 
       let firstHash: string | undefined;
       let firstExplorer: string | undefined;
+      let lastHash: string | undefined;
+      let lastExplorer: string | undefined;
+      const collectedSteps: Array<{
+        kind: string;
+        label: string;
+        txHash: string;
+        explorerUrl?: string;
+      }> = [];
+      let lifiOutcome: Awaited<ReturnType<typeof waitForLifiDone>> | null =
+        null;
 
       for (let i = 0; i < confirmedLegs.length; i++) {
         const leg = confirmedLegs[i]!;
@@ -344,65 +559,189 @@ export function TxReviewCard({
         ]);
 
         const walletAddress = resolveAddress(leg.walletId, confirmedWallets);
-        const result = await executeLifiAfterConfirm({
-          lifiStep: leg.lifiStep,
-          unsignedTx: leg.unsignedTx,
-          walletAddress,
-          handleSendTransaction: handleSendTransaction as never,
-          signTransaction: signTransaction as never,
-          walletAccount: findWalletAccount(wallets ?? [], walletAddress),
-          solanaRpcUrl: SOLANA_RPC_URL,
-        });
-
-        if (i === 0) {
-          firstHash = result.txHash;
-          firstExplorer = result.txHash
-            ? explorerUrlForTx(leg.unsignedTx.chainId, result.txHash)
-            : undefined;
-          if (firstHash) setTxHash(firstHash);
-          if (firstExplorer) setExplorerUrl(firstExplorer);
-        }
-
-        if (leg.waitForLifi) {
-          if (!result.txHash) {
-            throw new Error(
-              "Bridge source tx hash missing — cannot wait for LI.FI before lend.",
-            );
-          }
-          setStatus("waiting_bridge");
-          setLifiStatus("PENDING");
-          const ok = await waitForLifiDone({
-            txHash: result.txHash,
-            fromChain: leg.unsignedTx.chainId,
-            toChain: leg.unsignedTx.toChainId ?? toChain,
-            bridgeTool: leg.unsignedTx.tool ?? bridgeTool,
-            onStatus: (st, receiving) => {
-              setLifiStatus(st);
-              if (receiving) setReceivingTxHash(receiving);
-            },
+        try {
+          const result = await executeLifiAfterConfirm({
+            lifiStep: leg.lifiStep,
+            unsignedTx: leg.unsignedTx,
+            walletAddress,
+            signTransaction: signTransaction as never,
+            walletAccount: resolveSignAccount(wallets ?? [], walletAddress),
+            solanaRpcUrl: SOLANA_RPC_URL,
           });
-          if (!ok) {
-            throw new Error("Bridge did not complete — lend steps aborted.");
+
+          if (result.txHash) {
+            const explorer = explorerUrlForTx(
+              leg.unsignedTx.chainId,
+              result.txHash,
+            );
+            collectedSteps.push({
+              kind: leg.kind,
+              label: leg.label,
+              txHash: result.txHash,
+              explorerUrl: explorer,
+            });
+            setStepTxs(
+              collectedSteps.map((s) => ({
+                txHash: s.txHash,
+                explorerUrl: s.explorerUrl,
+              })),
+            );
+            lastHash = result.txHash;
+            lastExplorer = explorer;
+            if (i === 0) {
+              firstHash = result.txHash;
+              firstExplorer = explorer;
+              setTxHash(firstHash);
+              if (firstExplorer) setExplorerUrl(firstExplorer);
+            }
+            // Prefer deposit/lend hash as primary for Morpho plans.
+            if (leg.kind === "lend" && explorer) {
+              setTxHash(result.txHash);
+              setExplorerUrl(explorer);
+            }
           }
-          setStepNotes((prev) => [...prev, "Bridge settled — continuing."]);
+
+          if (leg.waitForLifi) {
+            if (!result.txHash) {
+              throw new Error(
+                "Bridge source tx hash missing — cannot wait for LI.FI before lend.",
+              );
+            }
+            setStatus("waiting_bridge");
+            setLifiStatus("PENDING");
+            const bridgeResult = await waitForLifiDone({
+              txHash: result.txHash,
+              fromChain: leg.unsignedTx.chainId,
+              toChain: leg.unsignedTx.toChainId ?? toChain,
+              bridgeTool: leg.unsignedTx.tool ?? bridgeTool,
+              onStatus: (st, receiving) => {
+                setLifiStatus(st);
+                if (receiving) setReceivingTxHash(receiving);
+              },
+            });
+            lifiOutcome = bridgeResult;
+            if (!bridgeResult.ok) {
+              const reason =
+                bridgeResult.failReason ??
+                bridgeResult.substatus ??
+                bridgeResult.status;
+              setLifiStatus(bridgeResult.status);
+              setError(
+                bridgeResult.status === "REFUNDED"
+                  ? `Bridge refunded (${reason}). Funds returned on source — try again with higher slippage or a larger amount.`
+                  : `Bridge did not complete (${reason}).`,
+              );
+              setStatus("error");
+              const lifi = agentLifiFromWatch(result.txHash, bridgeResult);
+              onOutcome?.({
+                status: "approved",
+                planId: review.planId,
+                txHash: firstHash,
+                explorerUrl: firstExplorer,
+                agentPayload: encodeTransferSubmitted({
+                  planId: review.planId,
+                  txHash: firstHash,
+                  explorerUrl: firstExplorer,
+                  fromChainId: fromChain,
+                  toChainId: toChain,
+                  route: routeLabel,
+                  isCrossChain: cross,
+                  stepCount: legs.length,
+                  completedAllSteps: false,
+                  lifi,
+                }),
+              });
+              return;
+            }
+            setStepNotes((prev) => [...prev, "Bridge settled — continuing."]);
+          } else if (
+            result.txHash &&
+            isLifiEvmChain(leg.unsignedTx.chainId)
+          ) {
+            // Default for every non-bridge EVM leg (approve, lend, same-chain
+            // swap): wait until the tx is mined — not a LI.FI status poll.
+            const isLast = i === confirmedLegs.length - 1;
+            setStepNotes((prev) => [
+              ...prev,
+              isLast
+                ? `Waiting for on-chain confirmation…`
+                : `Waiting for step ${i + 1} confirmation…`,
+            ]);
+            await waitForEvmReceipt({
+              chainId: leg.unsignedTx.chainId,
+              txHash: result.txHash,
+            });
+            setStepNotes((prev) => [
+              ...prev,
+              isLast
+                ? `Confirmed on-chain.`
+                : `Step ${i + 1} confirmed — continuing.`,
+            ]);
+          }
+        } catch (stepErr) {
+          const raw =
+            stepErr instanceof Error ? stepErr.message : String(stepErr);
+          throw new Error(
+            `Step ${i + 1}/${confirmedLegs.length} (${leg.kind}: ${leg.label}) failed: ${raw}`,
+          );
         }
       }
 
-      setStatus("done");
+      // LI.FI status is only for cross-chain bridges (already watched via
+      // waitForLifi). Same-chain swaps / Morpho / etc. are done after receipt.
+      if (
+        needsLifiBridgeWatch &&
+        !lifiOutcome &&
+        firstHash
+      ) {
+        lifiOutcome = await waitForLifiDone({
+          txHash: firstHash,
+          fromChain,
+          toChain,
+          bridgeTool,
+          onStatus: (st, receiving) => {
+            setLifiStatus(st);
+            if (receiving) setReceivingTxHash(receiving);
+          },
+        });
+      }
+
+      const bridgeOk = !lifiOutcome || lifiOutcome.ok !== false;
+      setStatus(bridgeOk ? "done" : "error");
+      if (!bridgeOk) {
+        setError(
+          `Bridge ${lifiOutcome?.status ?? "failed"}${
+            lifiOutcome?.failReason ? ` (${lifiOutcome.failReason})` : ""
+          }.`,
+        );
+      }
+      const primaryHash = lastHash ?? firstHash;
+      const primaryExplorer = lastExplorer ?? firstExplorer;
+      const lifi =
+        needsLifiBridgeWatch && firstHash
+          ? agentLifiFromWatch(firstHash, lifiOutcome)
+          : undefined;
       onOutcome?.({
         status: "approved",
         planId: review.planId,
-        txHash: firstHash,
-        explorerUrl: firstExplorer,
+        txHash: primaryHash,
+        explorerUrl: primaryExplorer,
         agentPayload: encodeTransferSubmitted({
           planId: review.planId,
-          txHash: firstHash,
-          explorerUrl: firstExplorer,
+          txHash: primaryHash,
+          explorerUrl: primaryExplorer,
           fromChainId: fromChain,
           toChainId: toChain,
           route: routeLabel,
-          tool: bridgeTool ?? toolName,
           isCrossChain: cross,
+          stepCount: legs.length,
+          completedAllSteps: bridgeOk,
+          steps: collectedSteps,
+          // Brand LI.FI only for real LI.FI transfer legs — never Morpho/etc.
+          via: hasLifiLeg ? "LI.FI" : undefined,
+          tool: hasLifiLeg ? "LI.FI" : undefined,
+          success: bridgeOk,
+          lifi,
         }),
       });
     } catch (err) {
@@ -447,11 +786,13 @@ export function TxReviewCard({
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/80 p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-zinc-100">
-          {status === "done"
+          {status === "done" || alreadySubmitted
             ? "Plan submitted"
             : status === "rejected"
               ? "Transfer rejected"
-              : "Transaction review"}
+              : legs.length > 1
+                ? `Transaction review · ${legs.length} signatures`
+                : "Transaction review"}
         </h3>
         {onDismiss && !settled && (
           <button
@@ -476,7 +817,7 @@ export function TxReviewCard({
                 {
                   id: review.wallet.id,
                   address: review.wallet.address,
-                  role: "Source · LI.FI",
+                  role: hasLifiLeg ? "Source · LI.FI" : "Signing wallet",
                 },
                 ...legs
                   .filter((l) => l.walletId !== review.wallet.id)
@@ -487,8 +828,10 @@ export function TxReviewCard({
                       `wallet:${l.walletId.slice(0, 8)}`,
                     role:
                       l.kind === "lend" || l.kind === "approve"
-                        ? "Morpho lend"
-                        : l.kind,
+                        ? "Lend"
+                        : l.kind === "swap" || l.kind === "bridge"
+                          ? "LI.FI"
+                          : l.kind,
                   })),
               ]
                 .filter(
@@ -510,24 +853,62 @@ export function TxReviewCard({
           </div>
           <div>
             <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-              What needs a signature
+              What needs a signature · what ran
             </p>
             <ol className="space-y-2">
-              {legs.map((leg, i) => (
+              {legs.map((leg, i) => {
+                const done = status === "done" || i < activeStep;
+                const active = i === activeStep && busy;
+                const stepTx = stepTxs[i];
+                return (
                 <li
                   key={`${leg.stepIndex}-${leg.kind}`}
                   className={
-                    i === activeStep && busy
+                    active
                       ? "rounded-lg border border-sky-800/60 bg-sky-950/20 px-3 py-2"
                       : "rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2"
                   }
                 >
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
-                    {i + 1}. {leg.kind}
-                  </p>
-                  <p className="text-sm text-zinc-100">{leg.label}</p>
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
+                        {i + 1}. {leg.kind}
+                      </p>
+                      <p className="text-sm text-zinc-100">{leg.label}</p>
+                      {stepTx?.txHash && (
+                        <p className="mt-1 font-mono text-[11px] text-zinc-500 break-all">
+                          {shortAddr(stepTx.txHash)}
+                          {stepTx.explorerUrl && (
+                            <>
+                              {" · "}
+                              <a
+                                href={stepTx.explorerUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-0.5 text-sky-400 hover:text-sky-300"
+                              >
+                                Explorer
+                                <ExternalLink className="size-2.5" />
+                              </a>
+                            </>
+                          )}
+                        </p>
+                      )}
+                    </div>
+                    {done && (
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                        Done
+                      </span>
+                    )}
+                    {active && (
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-sky-400">
+                        Signing
+                      </span>
+                    )}
+                  </div>
                 </li>
-              ))}
+                );
+              })}
             </ol>
           </div>
         </>
@@ -544,11 +925,15 @@ export function TxReviewCard({
         <dd className="text-zinc-300">
           {cross ? `${fromChain} → ${toChain}` : String(fromChain)}
         </dd>
-        <dt className="text-zinc-500">Via</dt>
-        <dd className="text-zinc-300">{toolName}</dd>
-        <dt className="text-zinc-500">Min out</dt>
-        <dd className="text-zinc-300">{q.minBuyAmount}</dd>
-        {eta != null && eta > 0 && !settled && (
+        {hasLifiLeg && (
+          <>
+            <dt className="text-zinc-500">Via</dt>
+            <dd className="text-zinc-300">LI.FI</dd>
+            <dt className="text-zinc-500">Min out</dt>
+            <dd className="text-zinc-300">{q.minBuyAmount}</dd>
+          </>
+        )}
+        {eta != null && eta > 0 && !settled && needsLifiBridgeWatch && (
           <>
             <dt className="text-zinc-500">ETA</dt>
             <dd className="text-zinc-300">~{eta}s</dd>
@@ -557,10 +942,25 @@ export function TxReviewCard({
         {!settled && (
           <>
             <dt className="text-zinc-500">Expires</dt>
-            <dd className="text-zinc-300">{review.plan.expiresAt}</dd>
+            <dd
+              className={
+                expiry.expired
+                  ? "font-medium text-red-400"
+                  : expiry.remainingMs < 60_000
+                    ? "font-medium text-amber-400"
+                    : "text-zinc-300"
+              }
+            >
+              {expiry.expired ? (
+                "Expired"
+              ) : (
+                <span className="tabular-nums">{expiry.label}</span>
+              )}
+            </dd>
           </>
         )}
-        {(status === "done" || status === "waiting_bridge") && (
+        {(status === "done" || status === "waiting_bridge") &&
+          needsLifiBridgeWatch && (
           <>
             <dt className="text-zinc-500">Source tx</dt>
             <dd className="text-zinc-300 break-all">{txHash ?? "—"}</dd>
@@ -590,6 +990,12 @@ export function TxReviewCard({
             )}
           </>
         )}
+        {status === "done" && !needsLifiBridgeWatch && (
+          <>
+            <dt className="text-zinc-500">Status</dt>
+            <dd className="text-emerald-400">Confirmed on-chain</dd>
+          </>
+        )}
         {status === "rejected" && (
           <>
             <dt className="text-zinc-500">Status</dt>
@@ -615,12 +1021,12 @@ export function TxReviewCard({
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300"
         >
-          View source tx
+          {needsLifiBridgeWatch ? "View source tx" : "View explorer"}
           <ExternalLink className="size-3" />
         </a>
       )}
 
-      {!settled && (
+      {!actionsLocked && (
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <button
             type="button"
@@ -628,31 +1034,30 @@ export function TxReviewCard({
             onClick={() => void onConfirm()}
             className="inline-flex items-center gap-2 rounded-lg bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-950 hover:bg-white disabled:opacity-40"
           >
-            {busy && status !== "rejecting" && (
+            {busy && (
               <Loader2 className="size-3.5 animate-spin" />
             )}
             {status === "signing"
-              ? `Sign step ${activeStep + 1}…`
+              ? `Sign step ${activeStep + 1}/${legs.length}…`
               : status === "waiting_bridge"
                 ? "Waiting for bridge…"
                 : status === "confirming"
                   ? "Confirming…"
                   : legs.length > 1
-                    ? "Confirm & sign all steps"
+                    ? `Confirm & sign ${legs.length} steps`
                     : "Confirm & sign"}
           </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void onReject()}
-            className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:border-zinc-500 hover:bg-zinc-800 disabled:opacity-40"
-          >
-            {status === "rejecting" && (
-              <Loader2 className="size-3.5 animate-spin" />
-            )}
-            Reject
-          </button>
         </div>
+      )}
+      {expiry.expired && !settled && status === "idle" && (
+        <p className="text-xs text-red-400">
+          Plan expired — request a new quote to continue.
+        </p>
+      )}
+      {alreadySubmitted && (
+        <p className="text-xs text-emerald-400/90">
+          Already submitted — see transfer status in chat.
+        </p>
       )}
     </div>
   );

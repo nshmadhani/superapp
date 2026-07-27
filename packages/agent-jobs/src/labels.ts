@@ -1,7 +1,5 @@
-import type { AgentType } from "./types";
-
-export function agentWalletLabel(type: AgentType, shortId: string): string {
-  const nice =
-    type === "dao_research" ? "DAO" : type === "ta" ? "TA" : type.toUpperCase();
-  return `Agent · ${nice} · ${shortId}`;
+/** Human label for an optional agent wallet. */
+export function agentWalletLabel(hint: string, shortId: string): string {
+  const nice = hint.replace(/_/g, " ").trim() || "Agent";
+  return `Agent ${nice} ${shortId}`;
 }

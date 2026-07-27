@@ -57,6 +57,11 @@ export type PlanUnsignedTx = {
   data: string;
   value: string;
   chainId: number;
+  /** Prefer LI.FI-provided gas so we don't rebuild EIP-1559 on legacy chains (e.g. HyperEVM). */
+  gasLimit?: string;
+  gasPrice?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
   minBuyAmount?: string;
   displayRoute?: string;
   tool?: string;

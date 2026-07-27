@@ -79,7 +79,105 @@ describe("quoteLifiTransfer", () => {
     expect(q.minBuyAmount).toBe("297000000000000");
     expect(q.unsignedTx?.to).toBe("0xrouter");
     expect(q.isCrossChain).toBe(false);
+    expect(q.slippage).toBe(0.005);
     expect(q.displayRoute).toContain("USDC");
+    expect(q.displayRoute).toContain("LI.FI");
+    expect(q.toolName).toBe("LI.FI");
+    expect(q.tool).toBe("0x");
+  });
+
+  it("preserves legacy gasPrice from LI.FI (HyperEVM-style)", async () => {
+    vi.mocked(getQuote).mockResolvedValue({
+      id: "step-hype",
+      type: "lifi",
+      tool: "relaydepository",
+      toolDetails: { key: "relaydepository", name: "Relay", logoURI: "" },
+      action: {
+        fromChainId: 999,
+        toChainId: 8453,
+        fromToken: {
+          address: "0x0000000000000000000000000000000000000000",
+          symbol: "HYPE",
+          decimals: 18,
+          chainId: 999,
+          name: "HYPE",
+          priceUSD: "50",
+        },
+        toToken: {
+          address: "0x0000000000000000000000000000000000000000",
+          symbol: "ETH",
+          decimals: 18,
+          chainId: 8453,
+          name: "ETH",
+          priceUSD: "3000",
+        },
+        fromAmount: "100000000000000000",
+        slippage: 0.005,
+      },
+      estimate: {
+        tool: "relaydepository",
+        fromAmount: "100000000000000000",
+        toAmount: "1000000000000000",
+        toAmountMin: "990000000000000",
+        approvalAddress: "0xrouter",
+        executionDuration: 60,
+        feeCosts: [],
+        gasCosts: [],
+      },
+      includedSteps: [],
+      transactionRequest: {
+        to: "0xrelay",
+        data: "0xdead",
+        value: "0x5af3107a4000",
+        chainId: 999,
+        gasPrice: "0xe41e700",
+        gasLimit: "0x83658",
+      },
+    } as never);
+
+    const q = await quoteLifiTransfer({
+      fromChainId: 999,
+      toChainId: 8453,
+      fromToken: "HYPE",
+      toToken: "ETH",
+      fromAmount: "100000000000000000",
+      fromAddress: "0xtaker",
+    });
+
+    expect(q.isCrossChain).toBe(true);
+    expect(q.fromToken).toBe("0x0000000000000000000000000000000000000000");
+    expect(q.toToken).toBe("0x0000000000000000000000000000000000000000");
+    expect(q.displayRoute).toContain("999");
+    expect(q.displayRoute).toContain("8453");
+    expect(q.slippage).toBeGreaterThanOrEqual(0.03);
+    expect(q.unsignedTx?.gasPrice).toBe("0xe41e700");
+    expect(q.unsignedTx?.gasLimit).toBe("0x83658");
+  });
+
+  it("rejects buyToken=ETH on HyperEVM (ambiguous Base gas)", async () => {
+    await expect(
+      quoteLifiTransfer({
+        fromChainId: 999,
+        toChainId: 999,
+        fromToken: "HYPE",
+        toToken: "ETH",
+        fromAmount: "100000000000000000",
+        fromAddress: "0xtaker",
+      }),
+    ).rejects.toThrow(/ambiguous_eth_on_hyperevm|noop_same_asset/);
+  });
+
+  it("rejects same-chain native→native noop", async () => {
+    await expect(
+      quoteLifiTransfer({
+        fromChainId: 999,
+        toChainId: 999,
+        fromToken: "HYPE",
+        toToken: "HYPE",
+        fromAmount: "100000000000000000",
+        fromAddress: "0xtaker",
+      }),
+    ).rejects.toThrow(/noop_same_asset/);
   });
 
   it("maps Solana quotes that only have transactionRequest.data", async () => {
@@ -141,5 +239,8 @@ describe("quoteLifiTransfer", () => {
     expect(q.unsignedTx?.data).toBe(b64);
     expect(q.unsignedTx?.to).toBe("");
     expect(q.unsignedTx?.chainId).toBe(solanaChain);
+    expect(q.toolName).toBe("LI.FI");
+    expect(q.tool).toBe("jupiter");
+    expect(q.displayRoute).toContain("LI.FI");
   });
 });

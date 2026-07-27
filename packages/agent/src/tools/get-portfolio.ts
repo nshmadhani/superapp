@@ -14,7 +14,7 @@ function addressesMatch(a: string, b: string): boolean {
 export function getPortfolioTool(ctx: AgentContext) {
   return tool({
     description:
-      "Fetch current token balances and USD values via Zerion for EVM or Solana wallets. Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet.",
+      "Fetch current token balances and USD values via Zerion for EVM or Solana wallets. Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
     inputSchema: z.object({
       walletId: z
         .string()

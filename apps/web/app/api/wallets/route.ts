@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         address,
         chainFamily,
         source,
-        label: body.label ?? (source === "turnkey" ? "Cipher" : "Connected"),
+        label: body.label ?? (source === "turnkey" ? "Ervo" : "Connected"),
         turnkeyWalletId: body.turnkeyWalletId
           ? String(body.turnkeyWalletId)
           : undefined,
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
     if (body.action === "create_turnkey") {
       const { createCipherWallet } = await import("@cipher/turnkey");
-      const created = await createCipherWallet("Cipher");
+      const created = await createCipherWallet("Ervo");
       const wallets = [];
       for (const account of created.accounts) {
         wallets.push(
@@ -68,7 +68,7 @@ export async function POST(req: Request) {
             address: account.address,
             chainFamily: account.chainFamily,
             source: "turnkey",
-            label: "Cipher",
+            label: "Ervo",
             turnkeyWalletId: created.turnkeyWalletId,
           }),
         );

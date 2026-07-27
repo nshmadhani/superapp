@@ -1,6 +1,6 @@
 import { streamText, stepCountIs, type ModelMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { CIPHER_SYSTEM_PROMPT } from "./system-prompt";
+import { cipherSystemPrompt } from "./system-prompt";
 import { createCipherTools, type AgentContext } from "./tools";
 
 export function createCipherAgent(ctx: AgentContext) {
@@ -18,7 +18,7 @@ export function createCipherAgent(ctx: AgentContext) {
     stream(messages: ModelMessage[]) {
       return streamText({
         model: openrouter(modelId),
-        system: CIPHER_SYSTEM_PROMPT,
+        system: cipherSystemPrompt(new Date()),
         messages,
         tools,
         stopWhen: stepCountIs(12),

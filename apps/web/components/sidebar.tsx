@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
-import { Bot, LayoutDashboard, MessageSquare, Plus } from "lucide-react";
+import { Bot, LayoutDashboard, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { ErvoLogo } from "@/components/ervo-logo";
 import { onCipherAuthed, waitForCipherSession } from "@/lib/cipher-session";
-import type { AgentRun } from "@cipher/agent-jobs";
+import type { AgentRun } from "@cipher/agent-jobs/types";
 
 type ChatRow = {
   id: string;
@@ -27,10 +28,12 @@ function itemClass(active: boolean) {
 }
 
 function agentTitle(run: AgentRun) {
+  const goal = run.goal?.trim();
+  if (goal) return goal.length > 40 ? `${goal.slice(0, 40)}…` : goal;
   if (run.type === "dca") return "DCA";
   if (run.type === "ta") return "TA";
   if (run.type === "dao_research") return "DAO research";
-  return run.type;
+  return String(run.type || "Agent");
 }
 
 export function Sidebar() {
@@ -83,18 +86,18 @@ export function Sidebar() {
       await handleLogin();
       return;
     }
-    router.push("/");
+    router.push("/app");
   }
 
   return (
     <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-zinc-800 bg-zinc-950">
       <div className="flex items-center justify-between gap-2 px-3 pb-2 pt-3">
         <Link
-          href="/"
+          href="/app"
           className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-sm font-semibold text-zinc-100 hover:bg-zinc-900"
         >
-          <MessageSquare className="size-4 text-zinc-400" />
-          Cipher
+          <ErvoLogo size="sm" className="size-4 object-contain" />
+          Ervo
         </Link>
         <button
           type="button"
@@ -108,7 +111,10 @@ export function Sidebar() {
       </div>
 
       <nav className="px-2 pb-2">
-        <Link href="/dashboard" className={navClass(pathname === "/dashboard")}>
+        <Link
+          href="/app/dashboard"
+          className={navClass(pathname === "/app/dashboard")}
+        >
           <LayoutDashboard className="size-4" />
           Dashboard
         </Link>
@@ -127,7 +133,7 @@ export function Sidebar() {
         ) : (
           <ul className="mb-4 space-y-0.5">
             {chats.map((c) => {
-              const href = `/c/${c.id}`;
+              const href = `/app/c/${c.id}`;
               return (
                 <li key={c.id}>
                   <Link href={href} className={itemClass(pathname === href)}>
@@ -145,7 +151,7 @@ export function Sidebar() {
             Agents
           </p>
           <Link
-            href="/agents"
+            href="/app/agents"
             className="text-[10px] uppercase tracking-wide text-zinc-600 hover:text-zinc-300"
           >
             New
@@ -158,14 +164,17 @@ export function Sidebar() {
         ) : agents.length === 0 ? (
           <p className="px-2 py-2 text-xs text-zinc-500">
             No agents yet.{" "}
-            <Link href="/agents" className="text-zinc-400 hover:text-zinc-200">
+            <Link
+              href="/app/agents"
+              className="text-zinc-400 hover:text-zinc-200"
+            >
               Launch one
             </Link>
           </p>
         ) : (
           <ul className="space-y-0.5">
             {agents.slice(0, 12).map((a) => {
-              const href = `/agents/${a.id}`;
+              const href = `/app/agents/${a.id}`;
               return (
                 <li key={a.id}>
                   <Link href={href} className={itemClass(pathname === href)}>

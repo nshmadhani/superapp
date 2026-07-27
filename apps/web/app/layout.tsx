@@ -3,7 +3,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "@turnkey/react-wallet-kit/styles.css";
 import "./globals.css";
 import { Providers } from "@/components/providers";
-import { AppShell } from "@/components/app-shell";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +15,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cipher",
+  title: "Ervo",
   description: "AI crypto co-pilot",
+  icons: {
+    icon: [
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "512x512" }],
+  },
 };
 
 export default function RootLayout({
@@ -31,9 +38,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="h-full bg-zinc-950 text-zinc-50">
-        <Providers>
-          <AppShell>{children}</AppShell>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

@@ -34,12 +34,26 @@ const TOOLS: Record<string, ToolMeta> = {
     description: "Balances and positions via Zerion",
     Icon: Landmark,
   },
+  get_market_ohlc: {
+    id: "get_market_ohlc",
+    label: "Market",
+    verb: "Fetching OHLCV",
+    description: "Live Binance spot candles",
+    Icon: TrendingUp,
+  },
   web_search: {
     id: "web_search",
     label: "Research",
     verb: "Searching the web",
     description: "Live market and protocol research",
     Icon: Search,
+  },
+  run_code: {
+    id: "run_code",
+    label: "Code",
+    verb: "Running code",
+    description: "Short sandbox analysis in chat",
+    Icon: Sparkles,
   },
   get_yields: {
     id: "get_yields",
@@ -69,6 +83,13 @@ const TOOLS: Record<string, ToolMeta> = {
     description: "Swap/bridge + Morpho lend across wallets",
     Icon: Waypoints,
   },
+  get_lifi_status: {
+    id: "get_lifi_status",
+    label: "LI.FI status",
+    verb: "Checking transfer",
+    description: "Bridge/swap status, refunds, and fail reasons",
+    Icon: Waypoints,
+  },
   simulate_plan: {
     id: "simulate_plan",
     label: "Simulate",
@@ -87,7 +108,7 @@ const TOOLS: Record<string, ToolMeta> = {
     id: "spawn_agent",
     label: "Agents",
     verb: "Spawning agent",
-    description: "Start a one-shot autonomous E2B job",
+    description: "Start a long-running autonomous job",
     Icon: Bot,
   },
 };

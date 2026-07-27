@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { agentRunStore } from "@cipher/agent-jobs";
+import { destroyAgentRun } from "@cipher/agent";
 
 type Ctx = { params: Promise<{ runId: string }> };
 
@@ -7,19 +7,14 @@ export async function POST(_req: Request, ctx: Ctx) {
   try {
     const userId = await requireAuthUserId();
     const { runId } = await ctx.params;
-    const run = agentRunStore.get(runId);
-    if (!run || run.userId !== userId) {
+    const result = await destroyAgentRun({ userId, runId });
+    if (!result.run) {
       return Response.json({ error: "not_found" }, { status: 404 });
     }
-    if (run.status === "succeeded" || run.status === "failed") {
-      return Response.json({ run });
-    }
-    const updated = agentRunStore.update(runId, {
-      status: "cancelled",
-      finishedAt: new Date().toISOString(),
-      error: "cancelled_by_user",
+    return Response.json({
+      run: result.run,
+      reclaim: result.reclaim,
     });
-    return Response.json({ run: updated });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: "unauthorized" }, { status: 401 });

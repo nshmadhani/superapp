@@ -1,4 +1,4 @@
-import type { DaoArtifact, DcaArtifact, TaArtifact } from "./types";
+import type { DaoArtifact, DcaArtifact } from "./types";
 
 export function fallbackDca(goal: string, policy: Record<string, unknown>): DcaArtifact {
   const asset = String(policy.asset ?? "ETH");
@@ -21,25 +21,6 @@ export function fallbackDca(goal: string, policy: Record<string, unknown>): DcaA
     summary: `Fallback DCA: ${amountUsd} USD of ${asset} ${cadence}. Goal: ${goal}`,
     walletAddress: undefined,
     walletLabel: undefined,
-  };
-}
-
-export function fallbackTa(symbol: string): TaArtifact {
-  const now = Date.now();
-  const series = Array.from({ length: 30 }, (_, i) => ({
-    t: now - (29 - i) * 86_400_000,
-    c: 100 + Math.sin(i / 4) * 8 + i * 0.3,
-  }));
-  const last = series[series.length - 1]?.c ?? 100;
-  return {
-    kind: "ta",
-    symbol,
-    interval: "1d",
-    bias: "neutral",
-    confidence: 0.4,
-    summary: `Fallback TA for ${symbol}: insufficient live data; showing illustrative series. Bias neutral.`,
-    indicators: { sma20: last * 0.98, sma50: last * 0.95, rsi14: 52, lastClose: last },
-    series,
   };
 }
 

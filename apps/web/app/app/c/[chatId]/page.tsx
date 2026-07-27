@@ -27,6 +27,6 @@ export default function ChatIdPage() {
   }
 
   return (
-    <ChatPanel chatId={chatId} onMissingChat={() => router.replace("/")} />
+    <ChatPanel chatId={chatId} onMissingChat={() => router.replace("/app")} />
   );
 }

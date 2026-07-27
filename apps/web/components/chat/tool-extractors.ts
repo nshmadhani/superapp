@@ -37,8 +37,12 @@ export type SpawnedAgent = {
   type: string;
   status: string;
   href: string;
+  goal?: string;
+  withWallet?: boolean;
+  needsFunding?: boolean;
   message?: string;
-  wallet?: { address?: string; label?: string };
+  fundingHint?: string;
+  wallet?: { address?: string; label?: string; chainFamily?: string };
 };
 
 export type AgentStep = {

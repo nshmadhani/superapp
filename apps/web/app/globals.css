@@ -75,3 +75,18 @@ body {
 .cipher-scroll::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+@keyframes ervo-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-ervo-fade-up {
+  animation: ervo-fade-up 0.7s ease-out both;
+}

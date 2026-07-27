@@ -1,5 +1,4 @@
 import { e2bConfigured, parseJsonFromE2bText, runInE2b } from "../e2b";
-import { fallbackTa } from "../fallbacks";
 import { fetchBinanceKlines, resolveBinanceSymbol } from "../market-data";
 import type { TaArtifact } from "../types";
 
@@ -10,15 +9,12 @@ export async function runTaJob(
   const symbol = String(policy.symbol ?? inferSymbol(goal) ?? "ETH");
   const interval = String(policy.interval ?? "1d");
 
-  let candles;
-  try {
-    candles = await fetchBinanceKlines(symbol, interval, 90);
-  } catch {
-    return { artifact: fallbackTa(symbol), source: "fallback" };
+  const candles = await fetchBinanceKlines(symbol, interval, 90);
+  if (!candles.length) {
+    throw new Error(`binance_klines_empty:${resolveBinanceSymbol(symbol)}`);
   }
 
   if (!e2bConfigured()) {
-    // Still compute locally so "live" market data is used even without E2B.
     return {
       artifact: analyzeLocally(symbol, interval, candles),
       source: "live",

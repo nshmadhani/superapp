@@ -1,3 +1,4 @@
+import { createEphemeralAgentWallet } from "./ephemeral-wallet";
 import type { AgentRun, AgentStep, AgentWallet, CreateAgentInput } from "./types";
 
 const runs = new Map<string, AgentRun>();
@@ -9,17 +10,21 @@ function now() {
 export const agentRunStore = {
   create(input: CreateAgentInput): AgentRun {
     const ts = now();
+    let wallet = input.wallet ?? null;
+    if (!wallet && input.withWallet) {
+      wallet = createEphemeralAgentWallet();
+    }
     const run: AgentRun = {
       id: crypto.randomUUID(),
       userId: input.userId,
-      type: input.type,
+      type: input.type?.trim() || "general",
       goal: input.goal,
       policy: input.policy ?? {},
       status: "queued",
       steps: [],
       artifact: null,
       source: null,
-      wallet: input.wallet ?? null,
+      wallet,
       createdAt: ts,
       updatedAt: ts,
     };

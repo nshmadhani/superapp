@@ -17,6 +17,7 @@
     "@cipher/core": "workspace:*",
     "@cipher/db": "workspace:*",
     "@cipher/turnkey": "workspace:*",
+    "@cipher/rpc": "workspace:*",
     "@cipher/zerion": "workspace:*",
     "@solana/web3.js": "^1.98.0",
     "@supabase/supabase-js": "^2.49.0",
