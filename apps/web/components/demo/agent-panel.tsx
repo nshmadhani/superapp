@@ -3,8 +3,11 @@
 import Link from "next/link";
 import { Bot, CircleDot, MessageSquare, Wallet } from "lucide-react";
 import { getDemoAgent, type DemoAgentActivity } from "@/lib/demo/fixtures";
+import { SimpleDcaChart, type DcaWeekMark } from "./simple-dca-chart";
 
-function statusTone(status: DemoAgentActivity["status"] | "active" | "paused" | "completed") {
+function statusTone(
+  status: DemoAgentActivity["status"] | "active" | "paused" | "completed",
+) {
   switch (status) {
     case "active":
     case "running":
@@ -38,6 +41,14 @@ function formatAt(iso: string) {
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
+
+const PANEL_WEEKS: DcaWeekMark[] = [
+  { label: "Jun 29", status: "bought", detail: "0.036 ETH" },
+  { label: "Jul 6", status: "skipped", detail: "Momentum rail" },
+  { label: "Jul 13", status: "bought", detail: "0.041 ETH" },
+  { label: "Jul 20", status: "bought", detail: "0.038 ETH" },
+  { label: "Jul 27", status: "next", detail: "Queued" },
+];
 
 export function AgentPanel({ agentId }: { agentId: string }) {
   const agent = getDemoAgent(agentId);
@@ -92,6 +103,13 @@ export function AgentPanel({ agentId }: { agentId: string }) {
           </p>
         </section>
 
+        {agent.kind === "dca" && (
+          <SimpleDcaChart
+            weeks={PANEL_WEEKS}
+            take="Same schedule the chat built. Buys in green, skip in amber, next in blue."
+          />
+        )}
+
         <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
             Agent wallet
@@ -99,9 +117,7 @@ export function AgentPanel({ agentId }: { agentId: string }) {
           <div className="flex items-start gap-2">
             <Wallet className="mt-0.5 size-4 text-zinc-500" />
             <div>
-              <p className="text-sm text-zinc-100">
-                {agent.agentWallet.label}
-              </p>
+              <p className="text-sm text-zinc-100">{agent.agentWallet.label}</p>
               <p className="font-mono text-xs text-zinc-500">
                 {shortAddr(agent.agentWallet.address)} ·{" "}
                 {agent.agentWallet.chainFamily === "solana" ? "Solana" : "EVM"}

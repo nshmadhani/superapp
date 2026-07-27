@@ -15,12 +15,14 @@ import {
 } from "@/components/chat/tool-extractors";
 import { DemoTaCard, type TaSnapshot } from "./demo-ta-card";
 import { ProTaChart } from "./pro-ta-chart";
+import { SimpleExplainChart } from "./simple-explain-chart";
 import {
   analyzeOhlc,
   buildTaWriteup,
   type OhlcBar,
   type TaAnalysis,
 } from "@/lib/demo/ta-from-ohlc";
+import { typeHuman } from "@/lib/demo/type-human";
 
 const TA_CHAT_ID = "e8c14f57-2a9b-4e60-8d3c-5f1a7b0e9264";
 
@@ -127,11 +129,23 @@ function MessageView({
         />
       )}
       {priceOut && candles.length > 0 && (
-        <ProTaChart
-          candles={candles}
-          analysis={analysis}
-          meta={feedMeta}
-        />
+        <div className="space-y-3">
+          <ProTaChart
+            candles={candles}
+            analysis={analysis}
+            meta={feedMeta}
+          />
+          {analysis && (
+            <SimpleExplainChart
+              series={candles.map((c) => c.close)}
+              support={analysis.levels.support[0]}
+              resistance={analysis.levels.resistance[0]}
+              bias={analysis.bias}
+              last={analysis.last}
+              structure={analysis.structure}
+            />
+          )}
+        </div>
       )}
       <CitationsCard hits={citations} />
       {taOut && (
@@ -187,20 +201,15 @@ export function TaLiveSession() {
         setMessages([
           { id: "t1", role: "user", parts: [{ type: "text", text: "" }] },
         ]);
-        for (let i = 0; i < prompt.length; i++) {
-          const slice = prompt.slice(0, i + 1);
-          setMessages([
-            { id: "t1", role: "user", parts: [{ type: "text", text: slice }] },
-          ]);
-          const ch = prompt[i]!;
-          const delay =
-            ch === " "
-              ? 55
-              : ch === "," || ch === "?" || ch === "."
-                ? 180
-                : 70 + (i % 5) * 8;
-          await sleep(delay, signal);
-        }
+        await typeHuman(prompt, {
+          signal,
+          typoRate: 0.05,
+          onUpdate: (text) => {
+            setMessages([
+              { id: "t1", role: "user", parts: [{ type: "text", text }] },
+            ]);
+          },
+        });
         await sleep(1400, signal);
 
         setMessages((prev) => [
@@ -391,24 +400,26 @@ export function TaLiveSession() {
           ),
         );
         await sleep(800, signal);
-        const step = 2;
-        for (let i = 0; i < writeup.length; i += step) {
-          const slice = writeup.slice(0, Math.min(i + step, writeup.length));
-          setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id !== "t2") return m;
-              const parts = [...m.parts];
-              for (let j = parts.length - 1; j >= 0; j--) {
-                if (parts[j]?.type === "text") {
-                  parts[j] = { type: "text", text: slice };
-                  break;
+        await typeHuman(writeup, {
+          signal,
+          typoRate: 0.018,
+          speed: 2.4,
+          onUpdate: (text) => {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== "t2") return m;
+                const parts = [...m.parts];
+                for (let j = parts.length - 1; j >= 0; j--) {
+                  if (parts[j]?.type === "text") {
+                    parts[j] = { type: "text", text };
+                    break;
+                  }
                 }
-              }
-              return { ...m, parts };
-            }),
-          );
-          await sleep(28, signal);
-        }
+                return { ...m, parts };
+              }),
+            );
+          },
+        });
 
         setBusy(false);
       } catch (err) {
@@ -432,7 +443,8 @@ export function TaLiveSession() {
           Technical analysis
         </h1>
         <p className="mt-0.5 text-[11px] text-zinc-600">
-          Live CoinGecko daily candles. Desk chart first, then a plain read.
+          Live CoinGecko daily candles. Desk chart, simple path, then a plain
+          read.
         </p>
       </div>
       <div className="cipher-scroll flex-1 overflow-y-auto pb-36">

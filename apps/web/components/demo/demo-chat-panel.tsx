@@ -30,6 +30,11 @@ import { PriceChart } from "./sparkline";
 import { getDemoChat } from "@/lib/demo/fixtures";
 import { useDemoPlayback } from "@/lib/demo/use-demo-playback";
 import { isTaLiveChat, TaLiveSession } from "./ta-live-session";
+import {
+  isResearchLiveChat,
+  ResearchLiveSession,
+} from "./research-live-session";
+import { isDcaLiveChat, DcaLiveSession } from "./dca-live-session";
 
 function extractMultiStepPlans(parts: UIMessage["parts"]): MultiStepPlan[] {
   const out: MultiStepPlan[] = [];
@@ -183,6 +188,12 @@ function DemoMessage({
 export function DemoChatPanel({ chatId }: { chatId: string }) {
   if (isTaLiveChat(chatId)) {
     return <TaLiveSession />;
+  }
+  if (isResearchLiveChat(chatId)) {
+    return <ResearchLiveSession />;
+  }
+  if (isDcaLiveChat(chatId)) {
+    return <DcaLiveSession />;
   }
   return <FixtureChatPanel chatId={chatId} />;
 }
