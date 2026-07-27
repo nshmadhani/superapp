@@ -1,9 +1,10 @@
 "use client";
 
 const SUGGESTIONS = [
-  "Review my portfolio",
-  "What are the best ETH yields right now?",
-  "Help me plan a swap",
+  "Bridge 0.4 ETH to Base then lend on Morpho",
+  "Set up a weekly DCA — $50 of ETH",
+  "Technical analysis on ETH — long or short?",
+  "Research Uniswap DAO recent governance",
 ];
 
 export function ChatEmptyState({
@@ -23,8 +24,8 @@ export function ChatEmptyState({
         Cipher
       </h1>
       <p className="max-w-sm text-sm text-zinc-500">
-        Ask about portfolios, research markets, or plan a trade. Watch the agent
-        run tools as it works.
+        Swap, bridge, and lend in one plan — or spawn an autonomous agent with
+        its own wallet. Watch tools run as Cipher works.
       </p>
       {onSuggest && (
         <div className="mt-2 flex max-w-md flex-wrap justify-center gap-2">

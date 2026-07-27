@@ -2,13 +2,80 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Bot,
+  CircleDot,
+  Loader2,
+  MessageSquare,
+  Wallet,
+} from "lucide-react";
 import type {
   AgentRun,
   DaoArtifact,
   DcaArtifact,
   TaArtifact,
 } from "@cipher/agent-jobs";
+import { PriceChart } from "./price-chart";
+
+function statusTone(status: string) {
+  if (status === "succeeded" || status === "done")
+    return "bg-emerald-500/15 text-emerald-300";
+  if (status === "failed" || status === "cancelled" || status === "error")
+    return "bg-red-500/15 text-red-300";
+  if (status === "running" || status === "queued" || status === "needs_confirm")
+    return "bg-sky-500/15 text-sky-300";
+  return "bg-zinc-500/20 text-zinc-400";
+}
+
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function formatAt(iso: string) {
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function agentKindTitle(type: AgentRun["type"]) {
+  if (type === "dca") return "DCA";
+  if (type === "ta") return "Technical analysis";
+  if (type === "dao_research") return "DAO research";
+  return type;
+}
+
+function guardRailsFromRun(run: AgentRun): Array<{ label: string; value: string }> {
+  const p = run.policy ?? {};
+  if (run.type === "dca") {
+    return [
+      {
+        label: "Buy size",
+        value: `$${Number(p.amountUsd ?? 50)} / ${String(p.cadence ?? "weekly")}`,
+      },
+      { label: "Asset", value: String(p.asset ?? "ETH") },
+      { label: "Mode", value: "One-shot schedule (confirm before live buys)" },
+    ];
+  }
+  if (run.type === "ta") {
+    return [
+      { label: "Symbol", value: String(p.symbol ?? "ETH") },
+      { label: "Interval", value: String(p.interval ?? "1d") },
+      { label: "Mode", value: "Read-only analysis · no orders" },
+    ];
+  }
+  return [
+    { label: "Topic", value: String(p.topic ?? run.goal) },
+    { label: "Mode", value: "Research brief · citations required" },
+  ];
+}
 
 export function AgentRunDetail({ runId }: { runId: string }) {
   const [run, setRun] = useState<AgentRun | null>(null);
@@ -36,81 +103,185 @@ export function AgentRunDetail({ runId }: { runId: string }) {
     run?.status === "running" ||
     run?.status === "needs_confirm";
 
+  const rails = useMemo(
+    () => (run ? guardRailsFromRun(run) : []),
+    [run],
+  );
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-4 py-8">
-      <Link
-        href="/agents"
-        className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300"
-      >
-        <ArrowLeft className="size-3.5" />
-        All agents
-      </Link>
+    <div className="cipher-scroll h-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8">
+        <Link
+          href="/agents"
+          className="inline-flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300"
+        >
+          <ArrowLeft className="size-3.5" />
+          All agents
+        </Link>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      {!run && !error && (
-        <p className="flex items-center gap-2 text-sm text-zinc-500">
-          <Loader2 className="size-4 animate-spin" /> Loading…
-        </p>
-      )}
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        {!run && !error && (
+          <p className="flex items-center gap-2 text-sm text-zinc-500">
+            <Loader2 className="size-4 animate-spin" /> Loading…
+          </p>
+        )}
 
-      {run && (
-        <>
-          <header className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold text-zinc-100">{run.goal}</h1>
-              {running && (
-                <Loader2 className="size-4 animate-spin text-sky-400" />
-              )}
-            </div>
-            <p className="text-xs uppercase tracking-wide text-zinc-600">
-              {run.type.replace("_", " ")} · {run.status}
-              {run.source ? ` · ${run.source}` : ""}
-              {run.sandboxId ? ` · e2b ${run.sandboxId.slice(0, 8)}` : ""}
-            </p>
+        {run && (
+          <>
+            <header className="flex flex-wrap items-start justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
+                  <Bot className="size-5 text-zinc-200" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600">
+                    Autonomous agent
+                  </p>
+                  <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
+                    {agentKindTitle(run.type)}
+                  </h1>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-300 hover:border-zinc-600 hover:text-zinc-100"
+                >
+                  <MessageSquare className="size-3.5" />
+                  Open chat
+                </Link>
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide ${statusTone(run.status)}`}
+                >
+                  {running ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <CircleDot className="size-3" />
+                  )}
+                  {run.status}
+                </span>
+              </div>
+            </header>
+
+            <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600">
+                What you asked
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-200">
+                {run.goal}
+              </p>
+            </section>
+
             {run.wallet && (
-              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs">
-                <p className="uppercase tracking-wide text-zinc-600">
+              <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
                   Agent wallet
                 </p>
-                <p className="mt-0.5 text-zinc-200">{run.wallet.label}</p>
-                <p className="mt-0.5 break-all font-mono text-zinc-400">
-                  {run.wallet.address}
-                </p>
-              </div>
-            )}
-          </header>
-
-          <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
-            <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-600">
-              Steps
-            </h2>
-            <ul className="space-y-2">
-              {run.steps.map((s) => (
-                <li key={s.id} className="flex gap-2 text-sm text-zinc-400">
-                  <span className="mt-1 size-1.5 shrink-0 rounded-full bg-zinc-600" />
+                <div className="flex items-start gap-2">
+                  <Wallet className="mt-0.5 size-4 text-zinc-500" />
                   <div>
-                    <p className="text-zinc-300">
-                      {s.label}{" "}
-                      <span className="text-zinc-600">({s.status})</span>
+                    <p className="text-sm text-zinc-100">{run.wallet.label}</p>
+                    <p className="font-mono text-xs text-zinc-500">
+                      {shortAddr(run.wallet.address)} ·{" "}
+                      {run.wallet.chainFamily === "solana" ? "Solana" : "EVM"}
                     </p>
-                    {s.detail && (
-                      <p className="text-xs text-zinc-600">{s.detail}</p>
-                    )}
+                    <p className="mt-1 text-xs text-zinc-600">
+                      Dedicated wallet for this agent — buys and lends run from
+                      here.
+                    </p>
                   </div>
-                </li>
-              ))}
-              {!run.steps.length && (
-                <li className="text-sm text-zinc-500">Waiting for worker…</li>
-              )}
-            </ul>
-          </section>
+                </div>
+              </section>
+            )}
 
-          {run.artifact && <ArtifactView artifact={run.artifact} />}
-          {run.error && (
-            <p className="text-sm text-red-400">Error: {run.error}</p>
-          )}
-        </>
-      )}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
+                  Guard rails
+                </p>
+                <dl className="space-y-2">
+                  {rails.map((r) => (
+                    <div key={r.label}>
+                      <dt className="text-xs text-zinc-600">{r.label}</dt>
+                      <dd className="text-sm text-zinc-100">{r.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+              <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
+                  Allowed chains
+                </p>
+                <ul className="flex flex-wrap gap-2">
+                  {(run.type === "dca"
+                    ? ["Base", "Ethereum"]
+                    : run.type === "ta"
+                      ? ["Binance public · spot"]
+                      : ["Open web"]
+                  ).map((c) => (
+                    <li
+                      key={c}
+                      className="rounded-full border border-zinc-800 px-2.5 py-1 text-xs text-zinc-300"
+                    >
+                      {c}
+                    </li>
+                  ))}
+                </ul>
+                {run.source && (
+                  <p className="mt-3 text-xs text-zinc-600">
+                    Result source: {run.source}
+                    {run.sandboxId
+                      ? ` · e2b ${run.sandboxId.slice(0, 8)}`
+                      : ""}
+                  </p>
+                )}
+              </section>
+            </div>
+
+            <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+              <p className="mb-3 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
+                Activity
+              </p>
+              {run.steps.length === 0 ? (
+                <p className="text-sm text-zinc-500">Waiting for worker…</p>
+              ) : (
+                <ul className="space-y-3">
+                  {run.steps.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex gap-3 border-b border-zinc-800/80 pb-3 last:border-0 last:pb-0"
+                    >
+                      <span
+                        className={`mt-0.5 h-fit shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${statusTone(s.status)}`}
+                      >
+                        {s.status}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <p className="text-sm text-zinc-100">{s.label}</p>
+                          <p className="text-[11px] text-zinc-600">
+                            {formatAt(s.at)}
+                          </p>
+                        </div>
+                        {s.detail && (
+                          <p className="mt-0.5 break-all text-xs text-zinc-500">
+                            {s.detail}
+                          </p>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {run.artifact && <ArtifactView artifact={run.artifact} />}
+            {run.error && (
+              <p className="text-sm text-red-400">Error: {run.error}</p>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -127,18 +298,21 @@ function ArtifactView({
 
 function DcaView({ a }: { a: DcaArtifact }) {
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 space-y-3">
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
       <h2 className="text-sm font-medium text-zinc-100">DCA schedule</h2>
       <p className="text-sm text-zinc-400">{a.summary}</p>
       <p className="text-xs text-zinc-500">
         {a.amountUsd} USD · {a.asset} · {a.cadence} · next {a.nextRunAt}
         {a.walletAddress
-          ? ` · wallet ${a.walletAddress.slice(0, 6)}…${a.walletAddress.slice(-4)}`
+          ? ` · wallet ${shortAddr(a.walletAddress)}`
           : ""}
       </p>
       <ul className="space-y-1 text-sm text-zinc-300">
         {a.legs.map((leg) => (
-          <li key={leg.date} className="flex justify-between border-t border-zinc-800/80 py-1.5">
+          <li
+            key={leg.date}
+            className="flex justify-between border-t border-zinc-800/80 py-1.5"
+          >
             <span>{leg.date}</span>
             <span>${leg.amountUsd}</span>
           </li>
@@ -149,9 +323,9 @@ function DcaView({ a }: { a: DcaArtifact }) {
 }
 
 function TaView({ a }: { a: TaArtifact }) {
-  const path = useMemo(() => buildSparkPath(a.series), [a.series]);
+  const closes = a.series.map((p) => p.c);
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 space-y-3">
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-zinc-100">
@@ -171,9 +345,7 @@ function TaView({ a }: { a: TaArtifact }) {
           {a.bias}
         </span>
       </div>
-      <svg viewBox="0 0 240 64" className="h-20 w-full text-sky-400">
-        <path d={path} fill="none" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
+      <PriceChart series={closes} />
       <dl className="grid grid-cols-2 gap-2 text-xs text-zinc-500 sm:grid-cols-4">
         <div>
           <dt>RSI14</dt>
@@ -206,7 +378,7 @@ function TaView({ a }: { a: TaArtifact }) {
 
 function DaoView({ a }: { a: DaoArtifact }) {
   return (
-    <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 space-y-3">
+    <section className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4 space-y-3">
       <h2 className="text-sm font-medium text-zinc-100">
         DAO research · {a.topic}
       </h2>
@@ -232,19 +404,4 @@ function DaoView({ a }: { a: DaoArtifact }) {
       </div>
     </section>
   );
-}
-
-function buildSparkPath(series: Array<{ t: number; c: number }>): string {
-  if (!series.length) return "";
-  const cs = series.map((p) => p.c);
-  const min = Math.min(...cs);
-  const max = Math.max(...cs);
-  const span = max - min || 1;
-  return series
-    .map((p, i) => {
-      const x = (i / Math.max(series.length - 1, 1)) * 240;
-      const y = 56 - ((p.c - min) / span) * 48;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
 }

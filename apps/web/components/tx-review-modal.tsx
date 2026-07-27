@@ -2,7 +2,7 @@
 
 import { isLifiSolanaChain, type PlanStepExecution } from "@cipher/core";
 import { useTurnkey } from "@turnkey/react-wallet-kit";
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   executeLifiAfterConfirm,
@@ -100,6 +100,11 @@ type LifiUiStatus =
   | "PARTIAL"
   | "REFUNDED"
   | "unknown";
+
+function shortAddr(addr: string) {
+  if (!addr || addr.length < 12) return addr || "—";
+  return `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+}
 
 function labelForLifiStatus(s: LifiUiStatus): string {
   switch (s) {
@@ -461,29 +466,78 @@ export function TxReviewCard({
       <p className="text-sm text-zinc-200">{routeLabel}</p>
 
       {legs.length > 1 && (
-        <ol className="space-y-1.5 rounded-lg border border-zinc-800/80 bg-black/30 px-3 py-2">
-          {legs.map((leg, i) => (
-            <li
-              key={`${leg.stepIndex}-${leg.kind}`}
-              className={
-                i === activeStep && busy
-                  ? "text-xs text-sky-300"
-                  : "text-xs text-zinc-400"
-              }
-            >
-              <span className="font-mono text-zinc-600">{i + 1}.</span>{" "}
-              <span className="uppercase tracking-wide text-zinc-500">
-                {leg.kind}
-              </span>{" "}
-              {leg.label}
-            </li>
-          ))}
-        </ol>
+        <>
+          <div>
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+              Wallets used
+            </p>
+            <ul className="space-y-1">
+              {[
+                {
+                  id: review.wallet.id,
+                  address: review.wallet.address,
+                  role: "Source · LI.FI",
+                },
+                ...legs
+                  .filter((l) => l.walletId !== review.wallet.id)
+                  .map((l) => ({
+                    id: l.walletId,
+                    address:
+                      review.wallets?.[l.walletId]?.address ??
+                      `wallet:${l.walletId.slice(0, 8)}`,
+                    role:
+                      l.kind === "lend" || l.kind === "approve"
+                        ? "Morpho lend"
+                        : l.kind,
+                  })),
+              ]
+                .filter(
+                  (w, i, arr) => arr.findIndex((x) => x.id === w.id) === i,
+                )
+                .map((w) => (
+                  <li
+                    key={w.id}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-zinc-400"
+                  >
+                    <Wallet className="size-3 shrink-0 text-zinc-600" />
+                    <span className="font-mono text-zinc-200">
+                      {shortAddr(w.address)}
+                    </span>
+                    <span className="text-zinc-600">· {w.role}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+          <div>
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+              What needs a signature
+            </p>
+            <ol className="space-y-2">
+              {legs.map((leg, i) => (
+                <li
+                  key={`${leg.stepIndex}-${leg.kind}`}
+                  className={
+                    i === activeStep && busy
+                      ? "rounded-lg border border-sky-800/60 bg-sky-950/20 px-3 py-2"
+                      : "rounded-lg border border-zinc-800/80 bg-zinc-950/40 px-3 py-2"
+                  }
+                >
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-600">
+                    {i + 1}. {leg.kind}
+                  </p>
+                  <p className="text-sm text-zinc-100">{leg.label}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </>
       )}
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs font-mono">
         <dt className="text-zinc-500">Primary wallet</dt>
-        <dd className="text-zinc-300 break-all">{review.wallet.address}</dd>
+        <dd className="text-zinc-300 break-all">
+          {shortAddr(review.wallet.address)}
+        </dd>
         <dt className="text-zinc-500">Steps</dt>
         <dd className="text-zinc-300">{legs.length}</dd>
         <dt className="text-zinc-500">Route</dt>

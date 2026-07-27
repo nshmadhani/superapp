@@ -109,18 +109,24 @@ export function AgentsHome() {
   }
 
   return (
+    <div className="cipher-scroll h-full overflow-y-auto">
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
-      <div>
-        <div className="mb-1 flex items-center gap-2">
-          <Bot className="size-5 text-zinc-400" />
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">
+          <Bot className="size-5 text-zinc-200" />
+        </div>
+        <div>
+          <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-600">
+            Autonomous agents
+          </p>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
             Agents
           </h1>
+          <p className="mt-1 max-w-xl text-sm text-zinc-500">
+            Each agent gets its own Turnkey wallet and control panel — not a
+            chat thread. DCA / TA / DAO research run one-shot in E2B.
+          </p>
         </div>
-        <p className="max-w-xl text-sm text-zinc-500">
-          Each agent gets its own Turnkey wallet. Jobs run in E2B (live-first,
-          with hard fallbacks) — not a chat thread.
-        </p>
       </div>
 
       {error && <p className="text-sm text-red-400">{error}</p>}
@@ -182,6 +188,7 @@ export function AgentsHome() {
           </ul>
         )}
       </section>
+    </div>
     </div>
   );
 }
