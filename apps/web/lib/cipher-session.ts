@@ -2,7 +2,7 @@
 
 import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
 
-/** Wait until Cipher cookie session exists (Turnkey → Supabase sync done). */
+/** Wait until Ervo cookie session exists (Turnkey → Supabase sync done). */
 export async function waitForCipherSession(timeoutMs = 15_000): Promise<boolean> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {

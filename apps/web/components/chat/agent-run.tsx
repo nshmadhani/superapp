@@ -16,12 +16,17 @@ function statusIcon(kind: ReturnType<typeof humanToolState>) {
 export function AgentRunView({
   steps,
   running,
+  preferOpen,
 }: {
   steps: AgentStep[];
   running?: boolean;
+  /** Keep the tool list expanded (demo playback / live runs) */
+  preferOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(preferOpen));
   if (!steps.length && !running) return null;
+
+  const expanded = preferOpen || open;
 
   const done = steps.filter((s) => humanToolState(s.state) === "done").length;
   const total = steps.length;
@@ -49,10 +54,10 @@ export function AgentRunView({
           Agent
         </span>
         <ChevronDown
-          className={`size-3.5 text-zinc-600 transition ${open ? "rotate-180" : ""}`}
+          className={`size-3.5 text-zinc-600 transition ${expanded ? "rotate-180" : ""}`}
         />
       </button>
-      {open && (
+      {expanded && (
         <ul className="space-y-1 border-t border-zinc-800/80 px-3 py-2">
           {steps.map((s) => {
             const meta = toolMeta(s.toolName);

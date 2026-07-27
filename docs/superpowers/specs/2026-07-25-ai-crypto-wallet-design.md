@@ -1,8 +1,8 @@
-# Cipher — AI Crypto Co-Pilot Design
+# Ervo — AI Crypto Co-Pilot Design
 
 **Date:** 2026-07-25  
 **Status:** Draft for review (post design-review decisions)  
-**Working name:** Cipher (keep for now)  
+**Working name:** Ervo (keep for now)  
 **Approach:** Adapter platform — one agent, implicit capabilities; consolidate many app UIs (Instadapp/Avocado thesis)  
 **Wallet provider:** Turnkey (app-created wallets) + external connect (WalletConnect / injected)  
 **Data / secrets store:** Supabase  
@@ -13,7 +13,7 @@ See also: [`TODO.md`](../../../TODO.md) for open follow-ups · [`VISION.md`](../
 
 ## 1. Vision
 
-Cipher is **ChatGPT for crypto** and a **single interface over many crypto apps**: one chat + dashboard that replaces hopping between Uniswap, Aave, Polymarket, Hyperliquid, bridge UIs, and the rest — similar in spirit to **Instadapp** (consolidate protocol surfaces) and **Avocado** (multi-chain wallet abstraction), but **AI-native**: you state intent; the agent routes across adapters.
+Ervo is **ChatGPT for crypto** and a **single interface over many crypto apps**: one chat + dashboard that replaces hopping between Uniswap, Aave, Polymarket, Hyperliquid, bridge UIs, and the rest — similar in spirit to **Instadapp** (consolidate protocol surfaces) and **Avocado** (multi-chain wallet abstraction), but **AI-native**: you state intent; the agent routes across adapters.
 
 **One-liner:** One interface for research and action across wallets, chains, and venues — always with explicit wallet choice and confirmation.
 
@@ -25,7 +25,7 @@ The agent can research, plan/execute with confirmation, and (later) run unattend
 **Orchestration:** Tool-driven only. Do **not** hardcode demo flows or intent→recipe routers. The model chooses from available tools (portfolio, search, yields, create/simulate/execute plan, etc.); product behavior emerges from tool design + confirm gates.
 
 **Consolidation thesis (Instadapp / Avocado):**
-| Precedent | What they unified | What Cipher unifies |
+| Precedent | What they unified | What Ervo unifies |
 |-----------|-------------------|---------------------|
 | Instadapp | Many DeFi protocol UIs → one management layer | Many app/venue UIs → one agent + adapter layer |
 | Avocado | Multi-chain EOAs → network/gas abstraction in one smart wallet | Multi-wallet + multi-chain inventory → one chat/dashboard; gas via **relayer + paymaster**; bridge/buy paths across funding sources |
@@ -107,7 +107,7 @@ These seven demos define what the system must support. If a demo fails, the desi
 
 **System:**
 - **Hyperliquid / Polymarket:** require a **VenueAccount** (venue pocket linked to a backing wallet). Link via wallet-native auth; store derived/session material in **Supabase** when the venue needs it for API/order flow.
-- **Kalshi path:** **Jupiter only** from Cipher’s POV (DFlow may exist under the hood; Cipher does not integrate DFlow directly). Outcome positions live as SPL in the **Solana wallet** — **no VenueAccount**.
+- **Kalshi path:** **Jupiter only** from Ervo’s POV (DFlow may exist under the hood; Ervo does not integrate DFlow directly). Outcome positions live as SPL in the **Solana wallet** — **no VenueAccount**.
 - Research/compare markets across venues; plan legs; confirm; execute.
 
 **Acceptance:** Cross-venue comparison + confirmable multi-leg plan; HL/Poly legs name VenueAccount + backing wallet; Jupiter-Kalshi leg names Solana wallet only.
@@ -181,7 +181,7 @@ Canonical confirm UI for every execution:
 | Kind | How | Provider |
 |------|-----|----------|
 | **External** | User connects existing wallet (Rainbow, MetaMask, Phantom, …) | WalletConnect / injected — no Turnkey required |
-| **App wallet** | Cipher creates/manages wallet for the user (embedded-style / programmable) | **Turnkey** (single wallet provider for this path) |
+| **App wallet** | Ervo creates/manages wallet for the user (embedded-style / programmable) | **Turnkey** (single wallet provider for this path) |
 
 UI labels type so it’s obvious whether funds sit in a connected external wallet or a Turnkey-backed app wallet.
 
@@ -196,7 +196,7 @@ UI labels type so it’s obvious whether funds sit in a connected external walle
 |-------|---------------|--------|
 | **Hyperliquid** | **Yes** | Deposit creates an HL account/pocket; may differ from EOA balances; optional agent/session material in Supabase |
 | **Polymarket** | **Yes** | Proxy/deposit wallet / venue pocket linked to backing wallet; session/API material in Supabase after wallet-native link |
-| **Jupiter (incl. Kalshi tokenized markets)** | **No** | Positions are SPL in the connected Solana wallet; Cipher talks to **Jupiter** only |
+| **Jupiter (incl. Kalshi tokenized markets)** | **No** | Positions are SPL in the connected Solana wallet; Ervo talks to **Jupiter** only |
 | Aave / Morpho / spot DEX | **No** | Protocol positions on the wallet |
 
 Conceptual shape:
@@ -335,10 +335,10 @@ Steps are typed (transfer | swap | bridge | venue_order | lend | …) with depen
 
 ### 6.7 Secrets (technical)
 
-Wallet-native linking ≠ “Cipher stores nothing.”
+Wallet-native linking ≠ “Ervo stores nothing.”
 
 - User connects wallet and signs to **link** HL / Polymarket.  
-- Cipher may store **derived/session credentials** (encrypted) in Supabase so orders/quotes work without pasting API keys.  
+- Ervo may store **derived/session credentials** (encrypted) in Supabase so orders/quotes work without pasting API keys.  
 - Jupiter path: primarily app-level Jupiter access + user signs Solana txs; no per-user VenueAccount.  
 - Seed phrases / Turnkey raw key material are not sent to the LLM.
 
@@ -425,7 +425,7 @@ Focused on correctness of execution, not a full compliance program:
 - Explicit product modes / mode switcher UI  
 - Unattended strategies as a demo requirement  
 - Native mobile or Telegram as primary surface  
-- Direct DFlow integration (Jupiter is the Cipher surface for that path)  
+- Direct DFlow integration (Jupiter is the Ervo surface for that path)  
 - Structured asset registry (deferred — AI disambiguation for now)  
 - Rebuilding Instadapp/Avocado themselves  
 
@@ -453,11 +453,11 @@ Agent evals: no `execute` without `confirmId`; plans name wallets / VenueAccount
 
 | Topic | Decision |
 |-------|----------|
-| Name | **Cipher** (keep for now) |
+| Name | **Ervo** (keep for now) |
 | App wallet provider | **Turnkey** (one provider for created wallets) |
 | External wallets | **Connect only** (WalletConnect / injected) |
 | VenueAccount | **Hyperliquid + Polymarket** only |
-| Jupiter / Kalshi | **No VenueAccount**; Cipher integrates **Jupiter** (not DFlow directly) |
+| Jupiter / Kalshi | **No VenueAccount**; Ervo integrates **Jupiter** (not DFlow directly) |
 | Secrets | Encrypted in **Supabase** after wallet-native link when venue needs session material |
 | Gas | **Relayer + paymaster** |
 | Multi-leg state | **Supabase** Plans + Steps |
@@ -483,4 +483,4 @@ Agent evals: no `execute` without `confirmId`; plans name wallets / VenueAccount
 
 ## 13. Summary
 
-Cipher is an **AI-native consolidation layer**: chat + dashboard over wallets (**Turnkey** app wallets + external connect), **VenueAccounts** for Hyperliquid and Polymarket, Jupiter for Kalshi-tokenized markets, Supabase for plans and secrets, and relayer/paymaster for gas. Research is open-web; execution is confirm-gated via structured Plans; capabilities are implicit. Success is the **seven demos**.
+Ervo is an **AI-native consolidation layer**: chat + dashboard over wallets (**Turnkey** app wallets + external connect), **VenueAccounts** for Hyperliquid and Polymarket, Jupiter for Kalshi-tokenized markets, Supabase for plans and secrets, and relayer/paymaster for gas. Research is open-web; execution is confirm-gated via structured Plans; capabilities are implicit. Success is the **seven demos**.

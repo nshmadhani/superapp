@@ -34,7 +34,7 @@ async function cleanupStaleExternalWallets() {
 }
 
 /**
- * When Turnkey authenticates: upsert Cipher user in Supabase, then sync wallets.
+ * When Turnkey authenticates: upsert Ervo user in Supabase, then sync wallets.
  * Wallet sync waits for auth cookie so /api/wallets never 401s on race.
  */
 export function AuthSync() {

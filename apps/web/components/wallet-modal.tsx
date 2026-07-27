@@ -72,9 +72,9 @@ export function WalletModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const [walletName, setWalletName] = useState("Cipher");
+  const [walletName, setWalletName] = useState("Ervo");
   const [chain, setChain] = useState<ChainFamily>("evm");
-  // Hide Cipher modal while Turnkey's connect UI is open (otherwise it stacks on top)
+  // Hide Ervo modal while Turnkey's connect UI is open (otherwise it stacks on top)
   const [yieldToTurnkey, setYieldToTurnkey] = useState(false);
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export function WalletModal({
       setError(null);
       setBusy(null);
       setDeletingId(null);
-      setWalletName("Cipher");
+      setWalletName("Ervo");
       setChain("evm");
       setYieldToTurnkey(false);
     }
@@ -118,7 +118,7 @@ export function WalletModal({
       });
       await afterWalletMutation("embedded");
       setView("list");
-      setWalletName("Cipher");
+      setWalletName("Ervo");
       setChain("evm");
     } catch (err) {
       setError(friendlyTurnkeyError(err));
@@ -165,7 +165,7 @@ export function WalletModal({
           try {
             await disconnectWalletAccount(provider);
           } catch {
-            // Still remove from Cipher even if provider disconnect fails
+            // Still remove from Ervo even if provider disconnect fails
           }
         }
         await fetch("/api/wallets", {
@@ -342,7 +342,7 @@ export function WalletModal({
                             <div className="mb-2 text-sm font-medium text-zinc-100">
                               {cleanWalletName(w.walletName) ||
                                 w.walletName ||
-                                "Cipher"}
+                                "Ervo"}
                             </div>
                             <ul className="space-y-1.5">
                               {(w.accounts ?? []).map((a) => (

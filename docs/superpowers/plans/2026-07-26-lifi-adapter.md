@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Implement task-by-task. Steps use checkbox syntax.
 
-**Goal:** Swap/bridge via LI.FI SDK with Cipher confirm gate.
+**Goal:** Swap/bridge via LI.FI SDK with Ervo confirm gate.
 
 **Architecture:** Server quotes with `@lifi/sdk` `getQuote`; store step/route on Plan; after UI confirm, client executes via SDK + Turnkey and polls `getStatus`.
 

@@ -43,7 +43,7 @@ export type SyncAuthInput = {
 };
 
 /**
- * Upserts Cipher user + Supabase Auth user keyed by Turnkey sub-org.
+ * Upserts Ervo user + Supabase Auth user keyed by Turnkey sub-org.
  */
 export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
   userId: string;

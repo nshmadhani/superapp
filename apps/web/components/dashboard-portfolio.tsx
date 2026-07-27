@@ -160,7 +160,7 @@ export function DashboardPortfolio() {
               Dashboard
             </h1>
             <p className="text-sm text-neutral-500">
-              Balances across your Cipher and connected wallets.
+              Balances across your Ervo and connected wallets.
             </p>
           </div>
           <label className="text-sm text-neutral-400">

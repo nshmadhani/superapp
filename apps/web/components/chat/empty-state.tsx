@@ -20,7 +20,7 @@ export function ChatEmptyState({
       }`}
     >
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
-        Cipher
+        Ervo
       </h1>
       <p className="max-w-sm text-sm text-zinc-500">
         Ask about portfolios, research markets, or plan a trade. Watch the agent

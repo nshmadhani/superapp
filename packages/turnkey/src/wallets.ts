@@ -18,7 +18,7 @@ export type CreatedCipherWallet = {
  * Prefer {@link createCipherWallet} for EVM + Solana.
  */
 export async function createEvmWallet(
-  label = "Cipher wallet",
+  label = "Ervo wallet",
 ): Promise<CreatedEvmWallet> {
   const created = await createCipherWallet(label);
   const evm = created.accounts.find((a) => a.chainFamily === "evm");
@@ -36,7 +36,7 @@ export async function createEvmWallet(
  * Never returns private key material — only wallet id + addresses.
  */
 export async function createCipherWallet(
-  label = "Cipher wallet",
+  label = "Ervo wallet",
 ): Promise<CreatedCipherWallet> {
   const turnkey = createTurnkeyClient();
   const api = turnkey.apiClient();
