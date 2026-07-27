@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Bot, LineChart, Repeat, ScrollText } from "lucide-react";
+import { useTurnkey } from "@turnkey/react-wallet-kit";
 import type { AgentRun, AgentType } from "@cipher/agent-jobs";
+import { createAgentWalletClient } from "@/lib/create-agent-wallet";
 
 const LAUNCHERS: Array<{
   type: AgentType;
@@ -17,7 +19,7 @@ const LAUNCHERS: Array<{
   {
     type: "dca",
     title: "DCA agent",
-    blurb: "One-shot schedule for recurring buys — no chat babysitting.",
+    blurb: "Gets its own wallet, then builds a recurring-buy schedule.",
     goal: "DCA $50 of ETH weekly",
     policy: { asset: "ETH", amountUsd: 50, cadence: "weekly" },
     icon: Repeat,
@@ -25,7 +27,7 @@ const LAUNCHERS: Array<{
   {
     type: "ta",
     title: "Technical analysis",
-    blurb: "Pull public OHLCV, run indicators in E2B, return long/short bias.",
+    blurb: "Dedicated wallet + OHLCV analysis in E2B for long/short bias.",
     goal: "Technical analysis on ETH daily — bias for short or long",
     policy: { symbol: "ETH", interval: "1d" },
     icon: LineChart,
@@ -33,7 +35,7 @@ const LAUNCHERS: Array<{
   {
     type: "dao_research",
     title: "DAO research",
-    blurb: "Autonomous brief on a token/DAO with citations.",
+    blurb: "Isolated agent wallet while researching a token/DAO.",
     goal: "Research Uniswap DAO recent governance",
     policy: { topic: "Uniswap DAO governance" },
     icon: ScrollText,
@@ -47,8 +49,13 @@ function statusColor(status: string) {
   return "text-zinc-400";
 }
 
+function shortAddr(addr: string) {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
 export function AgentsHome() {
   const router = useRouter();
+  const { createWallet, refreshWallets } = useTurnkey();
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [busy, setBusy] = useState<AgentType | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,14 +73,30 @@ export function AgentsHome() {
     return () => clearInterval(t);
   }, [refresh]);
 
-  async function launch(type: AgentType, goal: string, policy: Record<string, unknown>) {
+  async function launch(
+    type: AgentType,
+    goal: string,
+    policy: Record<string, unknown>,
+  ) {
     setBusy(type);
     setError(null);
     try {
+      // Prefer client Turnkey wallet in the user's sub-org (signable).
+      let wallet;
+      try {
+        wallet = await createAgentWalletClient({
+          type,
+          createWallet: createWallet as never,
+          refreshWallets: refreshWallets as never,
+        });
+      } catch {
+        wallet = undefined; // API will server-provision a dedicated wallet
+      }
+
       const res = await fetch("/api/agents", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ type, goal, policy }),
+        body: JSON.stringify({ type, goal, policy, wallet }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "create_failed");
@@ -95,8 +118,8 @@ export function AgentsHome() {
           </h1>
         </div>
         <p className="max-w-xl text-sm text-zinc-500">
-          One-shot autonomous jobs. They run in E2B sandboxes (live-first, with
-          hard fallbacks) — not a chat thread.
+          Each agent gets its own Turnkey wallet. Jobs run in E2B (live-first,
+          with hard fallbacks) — not a chat thread.
         </p>
       </div>
 
@@ -119,7 +142,7 @@ export function AgentsHome() {
                 {l.blurb}
               </p>
               <p className="mt-3 text-[11px] uppercase tracking-wide text-zinc-600">
-                {busy === l.type ? "Starting…" : "Run once"}
+                {busy === l.type ? "Creating wallet…" : "Run once"}
               </p>
             </button>
           );
@@ -144,6 +167,9 @@ export function AgentsHome() {
                     <p className="truncate text-zinc-200">{r.goal}</p>
                     <p className="text-[11px] uppercase tracking-wide text-zinc-600">
                       {r.type.replace("_", " ")}
+                      {r.wallet
+                        ? ` · ${r.wallet.label} · ${shortAddr(r.wallet.address)}`
+                        : ""}
                       {r.source ? ` · ${r.source}` : ""}
                     </p>
                   </div>

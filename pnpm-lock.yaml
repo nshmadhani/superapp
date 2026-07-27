@@ -167,6 +167,9 @@ importers:
       '@cipher/search':
         specifier: workspace:*
         version: link:../search
+      '@cipher/turnkey':
+        specifier: workspace:*
+        version: link:../turnkey
       '@cipher/zerion':
         specifier: workspace:*
         version: link:../zerion

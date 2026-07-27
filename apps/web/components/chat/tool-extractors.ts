@@ -38,6 +38,7 @@ export type SpawnedAgent = {
   status: string;
   href: string;
   message?: string;
+  wallet?: { address?: string; label?: string };
 };
 
 export type AgentStep = {

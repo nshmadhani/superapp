@@ -1,12 +1,18 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { createAndStartAgentRun } from "@cipher/agent-jobs";
+import {
+  agentRunStore,
+  createAgentRun,
+  startAgentRun,
+} from "@cipher/agent-jobs";
+import { provisionAgentWallet } from "../provision-agent-wallet";
+import { store } from "../store";
 import type { AgentContext } from "./index";
 
 export function spawnAgentTool(ctx: AgentContext) {
   return tool({
     description:
-      "Spawn a one-shot autonomous agent job (DCA, technical analysis, or DAO research). Returns a run id and Agents URL. Use when the user wants something that should run without a chat back-and-forth.",
+      "Spawn a one-shot autonomous agent job (DCA, technical analysis, or DAO research) with its own dedicated Turnkey wallet. Returns a run id, agent wallet address, and Agents URL. Use when the user wants something that should run without a chat back-and-forth.",
     inputSchema: z.object({
       type: z.enum(["dca", "ta", "dao_research"]),
       goal: z.string().min(3).describe("What the autonomous agent should accomplish"),
@@ -18,18 +24,52 @@ export function spawnAgentTool(ctx: AgentContext) {
         ),
     }),
     execute: async ({ type, goal, policy }) => {
-      const run = createAndStartAgentRun({
+      const run = createAgentRun({
         userId: ctx.userId,
         type,
         goal,
         policy: policy ?? {},
+        wallet: null,
       });
+
+      let wallet;
+      try {
+        wallet = await provisionAgentWallet({
+          userId: ctx.userId,
+          type,
+          runId: run.id,
+        });
+        agentRunStore.setWallet(run.id, wallet);
+      } catch (err) {
+        agentRunStore.update(run.id, {
+          status: "failed",
+          error:
+            err instanceof Error
+              ? err.message
+              : "agent_wallet_provision_failed",
+          finishedAt: new Date().toISOString(),
+        });
+        return {
+          error: "agent_wallet_provision_failed",
+          message:
+            err instanceof Error ? err.message : "Could not create agent wallet",
+          runId: run.id,
+        };
+      }
+
+      // Ensure inventory has the wallet (provision already upserts).
+      await store.listWallets(ctx.userId);
+
+      startAgentRun(run.id);
+      const started = agentRunStore.get(run.id)!;
+
       return {
-        runId: run.id,
-        type: run.type,
-        status: run.status,
-        href: `/agents/${run.id}`,
-        message: `Autonomous agent started. Open Agents to watch it: /agents/${run.id}`,
+        runId: started.id,
+        type: started.type,
+        status: started.status,
+        href: `/agents/${started.id}`,
+        wallet: started.wallet,
+        message: `Autonomous agent started with dedicated wallet ${wallet.label} (${wallet.address}). Open Agents to watch it: /agents/${started.id}`,
       };
     },
   });

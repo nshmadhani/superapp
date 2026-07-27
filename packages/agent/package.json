@@ -17,6 +17,7 @@
     "@cipher/db": "workspace:*",
     "@cipher/defillama": "workspace:*",
     "@cipher/search": "workspace:*",
+    "@cipher/turnkey": "workspace:*",
     "@cipher/zerion": "workspace:*",
     "@openrouter/ai-sdk-provider": "^1.5.4",
     "ai": "^5.0.0",

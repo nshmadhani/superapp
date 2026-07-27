@@ -11,6 +11,14 @@ import type {
 } from "./tool-extractors";
 
 export function SpawnAgentCard({ run }: { run: SpawnedAgent }) {
+  const walletAddr =
+    run.wallet && typeof run.wallet === "object" && "address" in run.wallet
+      ? String((run.wallet as { address?: string }).address ?? "")
+      : "";
+  const walletLabel =
+    run.wallet && typeof run.wallet === "object" && "label" in run.wallet
+      ? String((run.wallet as { label?: string }).label ?? "")
+      : "";
   return (
     <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2.5">
       <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
@@ -20,6 +28,12 @@ export function SpawnAgentCard({ run }: { run: SpawnedAgent }) {
       <p className="text-sm text-zinc-200">
         {run.type.replace("_", " ")} · {run.status}
       </p>
+      {walletAddr && (
+        <p className="mt-1 text-xs text-zinc-500">
+          {walletLabel || "Agent wallet"} · {walletAddr.slice(0, 6)}…
+          {walletAddr.slice(-4)}
+        </p>
+      )}
       <Link
         href={run.href}
         className="mt-2 inline-flex text-xs text-sky-400 hover:underline"

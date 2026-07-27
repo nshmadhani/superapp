@@ -1,4 +1,4 @@
-import type { AgentRun, AgentStep, CreateAgentInput } from "./types";
+import type { AgentRun, AgentStep, AgentWallet, CreateAgentInput } from "./types";
 
 const runs = new Map<string, AgentRun>();
 
@@ -19,6 +19,7 @@ export const agentRunStore = {
       steps: [],
       artifact: null,
       source: null,
+      wallet: input.wallet ?? null,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -50,6 +51,7 @@ export const agentRunStore = {
         | "sandboxId"
         | "error"
         | "finishedAt"
+        | "wallet"
       >
     >,
   ): AgentRun | null {
@@ -57,6 +59,10 @@ export const agentRunStore = {
     if (!run) return null;
     Object.assign(run, patch, { updatedAt: now() });
     return structuredClone(run);
+  },
+
+  setWallet(id: string, wallet: AgentWallet): AgentRun | null {
+    return this.update(id, { wallet });
   },
 
   appendStep(id: string, step: Omit<AgentStep, "at"> & { at?: string }): AgentRun | null {

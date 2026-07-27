@@ -20,6 +20,15 @@ export type AgentStep = {
 
 export type AgentArtifactSource = "live" | "fallback";
 
+/** Dedicated Turnkey wallet owned by this agent run (not the user's main wallet). */
+export type AgentWallet = {
+  cipherWalletId: string;
+  address: string;
+  chainFamily: "evm" | "solana";
+  turnkeyWalletId?: string;
+  label: string;
+};
+
 export type DcaArtifact = {
   kind: "dca";
   asset: string;
@@ -28,6 +37,9 @@ export type DcaArtifact = {
   nextRunAt: string;
   legs: Array<{ date: string; amountUsd: number }>;
   summary: string;
+  /** Agent's dedicated wallet that would execute the DCA buys. */
+  walletAddress?: string;
+  walletLabel?: string;
 };
 
 export type TaArtifact = {
@@ -44,6 +56,7 @@ export type TaArtifact = {
     lastClose?: number;
   };
   series: Array<{ t: number; c: number }>;
+  walletAddress?: string;
 };
 
 export type DaoArtifact = {
@@ -52,6 +65,7 @@ export type DaoArtifact = {
   summary: string;
   bullets: string[];
   citations: Array<{ title: string; url: string }>;
+  walletAddress?: string;
 };
 
 export type AgentArtifact = DcaArtifact | TaArtifact | DaoArtifact;
@@ -66,6 +80,8 @@ export type AgentRun = {
   steps: AgentStep[];
   artifact: AgentArtifact | null;
   source: AgentArtifactSource | null;
+  /** Isolated wallet for this agent — provisioned at create. */
+  wallet: AgentWallet | null;
   sandboxId?: string;
   error?: string;
   createdAt: string;
@@ -78,4 +94,5 @@ export type CreateAgentInput = {
   type: AgentType;
   goal: string;
   policy?: Record<string, unknown>;
+  wallet?: AgentWallet | null;
 };

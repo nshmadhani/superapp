@@ -30,9 +30,17 @@ AgentRun {
 }
 ```
 
+## Agent wallets
+
+Every AgentRun owns a dedicated Turnkey EVM wallet (label `Agent · {TYPE} · {shortId}`):
+
+- **Agents UI:** create wallet in the user's Turnkey sub-org (client `createWallet`), sync to Cipher, pass on `POST /api/agents`.
+- **Chat `spawn_agent` / API without wallet:** server `provisionAgentWallet` (prefer user `turnkey_suborg_id`, fallback parent org).
+- Wallet is stored on the run, listed in Agents UI, and stamped onto artifacts (`walletAddress`).
+
 ## Runtime
 
-1. `POST /api/agents` creates a run (`queued`) and kicks an in-process worker.
+1. `POST /api/agents` creates a run, provisions/attaches an agent wallet, then kicks an in-process worker.
 2. Worker sets `running`, appends steps, opens an E2B Code Interpreter sandbox when `E2B_API_KEY` is set.
 3. Type runners:
    - **DCA** — schedule math + optional confirm plan stub in sandbox; artifact = schedule card.

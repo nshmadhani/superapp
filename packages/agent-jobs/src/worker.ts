@@ -19,6 +19,22 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
 
   agentRunStore.update(runId, { status: "running", error: undefined });
 
+  const walletStepId = crypto.randomUUID();
+  agentRunStore.appendStep(runId, {
+    id: walletStepId,
+    label: run.wallet
+      ? `Use agent wallet ${run.wallet.label}`
+      : "Agent wallet missing",
+    status: "running",
+    detail: run.wallet?.address,
+  });
+  agentRunStore.patchStep(runId, walletStepId, {
+    status: run.wallet ? "done" : "error",
+    detail: run.wallet
+      ? `${run.wallet.address} (${run.wallet.chainFamily})`
+      : "no_wallet",
+  });
+
   const prepId = crypto.randomUUID();
   agentRunStore.appendStep(runId, {
     id: prepId,
@@ -41,12 +57,21 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
   });
 
   try {
+    const latest = agentRunStore.get(runId)!;
     const result =
-      run.type === "dca"
-        ? await runDcaJob(run.goal, run.policy)
-        : run.type === "ta"
-          ? await runTaJob(run.goal, run.policy)
-          : await runDaoJob(run.goal, run.policy);
+      latest.type === "dca"
+        ? await runDcaJob(latest.goal, latest.policy)
+        : latest.type === "ta"
+          ? await runTaJob(latest.goal, latest.policy)
+          : await runDaoJob(latest.goal, latest.policy);
+
+    const artifact = {
+      ...result.artifact,
+      walletAddress: latest.wallet?.address,
+      ...(result.artifact.kind === "dca"
+        ? { walletLabel: latest.wallet?.label }
+        : {}),
+    };
 
     agentRunStore.patchStep(runId, workId, {
       status: "done",
@@ -55,7 +80,7 @@ export async function executeAgentRun(runId: string): Promise<AgentRun | null> {
 
     return agentRunStore.update(runId, {
       status: "succeeded",
-      artifact: result.artifact,
+      artifact,
       source: result.source,
       sandboxId: result.sandboxId,
       finishedAt: new Date().toISOString(),

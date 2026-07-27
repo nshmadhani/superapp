@@ -19,6 +19,8 @@ export function fallbackDca(goal: string, policy: Record<string, unknown>): DcaA
     nextRunAt: legs[0]?.date ?? start.toISOString().slice(0, 10),
     legs,
     summary: `Fallback DCA: ${amountUsd} USD of ${asset} ${cadence}. Goal: ${goal}`,
+    walletAddress: undefined,
+    walletLabel: undefined,
   };
 }
 

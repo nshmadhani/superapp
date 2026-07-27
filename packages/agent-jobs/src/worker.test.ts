@@ -24,11 +24,21 @@ describe("executeAgentRun", () => {
       type: "dca",
       goal: "DCA $50 of ETH weekly",
       policy: { asset: "ETH", amountUsd: 50, cadence: "weekly" },
+      wallet: {
+        cipherWalletId: "w1",
+        address: "0xagent0000000000000000000000000000000001",
+        chainFamily: "evm",
+        label: "Agent · DCA · test01",
+      },
     });
     const done = await executeAgentRun(run.id);
     expect(done?.status).toBe("succeeded");
     expect(done?.artifact?.kind).toBe("dca");
     expect(done?.source).toBe("fallback");
+    expect(done?.wallet?.address).toMatch(/^0x/);
+    expect(done?.artifact && "walletAddress" in done.artifact
+      ? done.artifact.walletAddress
+      : null).toBe(run.wallet?.address);
     expect(done?.steps.length).toBeGreaterThan(0);
   });
 });

@@ -67,6 +67,17 @@ export function AgentRunDetail({ runId }: { runId: string }) {
               {run.source ? ` · ${run.source}` : ""}
               {run.sandboxId ? ` · e2b ${run.sandboxId.slice(0, 8)}` : ""}
             </p>
+            {run.wallet && (
+              <div className="rounded-lg border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs">
+                <p className="uppercase tracking-wide text-zinc-600">
+                  Agent wallet
+                </p>
+                <p className="mt-0.5 text-zinc-200">{run.wallet.label}</p>
+                <p className="mt-0.5 break-all font-mono text-zinc-400">
+                  {run.wallet.address}
+                </p>
+              </div>
+            )}
           </header>
 
           <section className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4">
@@ -121,6 +132,9 @@ function DcaView({ a }: { a: DcaArtifact }) {
       <p className="text-sm text-zinc-400">{a.summary}</p>
       <p className="text-xs text-zinc-500">
         {a.amountUsd} USD · {a.asset} · {a.cadence} · next {a.nextRunAt}
+        {a.walletAddress
+          ? ` · wallet ${a.walletAddress.slice(0, 6)}…${a.walletAddress.slice(-4)}`
+          : ""}
       </p>
       <ul className="space-y-1 text-sm text-zinc-300">
         {a.legs.map((leg) => (
