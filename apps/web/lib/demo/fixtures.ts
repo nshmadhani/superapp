@@ -93,7 +93,7 @@ const kaminoPlanDone = {
     {
       label: "Trading",
       address: ADDR_TRADING,
-      role: "Source ETH · swap & bridge out",
+      role: "Source · LI.FI route off Base",
     },
     {
       label: "Solana",
@@ -103,24 +103,15 @@ const kaminoPlanDone = {
   ],
   legs: [
     {
-      id: "leg-swap",
-      action: "swap" as const,
-      title: "Move 0.4 ETH into a bridgeable form",
-      detail: "Routed on Base so it can leave for Solana",
-      walletLabel: "Trading",
-      walletAddress: ADDR_TRADING,
-      chainLabel: "Base",
-      txHash: "0x8f3a91c2e7b04d1a6e55c0b9f2d8471e3a0c5b6d",
-    },
-    {
-      id: "leg-bridge",
+      id: "leg-lifi",
       action: "bridge" as const,
-      title: "Bridge value over to Solana",
-      detail: "Cross-chain hop into the Solana wallet you picked",
+      title: "0.4 ETH on Base → Solana via LI.FI",
+      detail:
+        "One LI.FI route — swap + bridge in a single source tx from Trading",
       walletLabel: "Trading",
       walletAddress: ADDR_TRADING,
       chainLabel: "Base → Solana",
-      txHash: "0x2c1b0a9f8e7d6c5b4a3928170615243f0e1d2c3b",
+      txHash: "0x8f3a91c2e7b04d1a6e55c0b9f2d8471e3a0c5b6d",
     },
     {
       id: "leg-vault",
@@ -245,7 +236,7 @@ export const DEMO_CHATS: DemoChat[] = [
           "tc-ask-wallets",
         ),
         textPart(
-          "You’ve got ETH on **Trading** and **Vault**, and a **Solana** wallet ready for Kamino. Tell me which pairing to use and I’ll path the rest — swap / bridge / deposit as needed.",
+          "You’ve got ETH on **Trading** and **Vault**, and a **Solana** wallet ready for Kamino. Tell me which pairing to use — I’ll route through LI.FI and deposit into the vault.",
         ),
       ]),
       userMsg("u2", "Trading (ETH) + Solana (vault)"),
@@ -279,12 +270,12 @@ export const DEMO_CHATS: DemoChat[] = [
             type: "multi_step_execution",
             planId: "demo-kamino",
             status: "completed",
-            legsCompleted: 3,
+            legsCompleted: 2,
           },
           "tc-exec",
         ),
         textPart(
-          "Done — **0.4 ETH** is in the Kamino vault via **Trading → Solana**.\n\nUsed the wallets you picked. The plan below is what needed signatures and what actually ran.",
+          "Done — **0.4 ETH** is in the Kamino vault.\n\n**Trading** signed one **LI.FI** route (Base → Solana). **Solana** signed the vault deposit. Plan below.",
         ),
       ]),
     ],
