@@ -1,4 +1,4 @@
-# Cipher — YC Walkthrough Demo
+# Cipher — Seeded product demo (branch)
 
 **Date:** 2026-07-26  
 **Branch:** `cursor/yc-scripted-demo-54c0`  
@@ -6,26 +6,28 @@
 
 ## Intent
 
-A fake-but-finished Cipher you can open and walk through for YC. No typing, no env keys, no live chain calls. Preloaded chats, autonomous agents, and dashboard.
+Cipher UI that looks like the real product — preloaded chats, one autonomous agent, and dashboard. No auth / env / live chain required on this branch. Chat URLs use UUIDs.
 
 ## Information architecture
 
 | Sidebar | Item | Route |
 |---------|------|-------|
-| Chats | Swap · Bridge · Lend | `/c/swap-bridge-lend` |
-| Chats | Token / DAO research | `/c/dao-research` |
-| Agents | DCA | `/agents/dca` |
-| Agents | Technical analysis | `/agents/ta` |
+| Chats | Swap · Bridge · Lend | `/c/<uuid>` |
+| Chats | Token / market research | `/c/<uuid>` |
+| Chats | Technical analysis | `/c/<uuid>` |
+| Chats | DCA agent | `/c/<uuid>` |
+| Agents | DCA | `/agents/<uuid>` |
 | — | Dashboard | `/dashboard` |
 
-**Agents** = autonomous agents (control panel: brief + config + run activity). Not the in-chat tool strip.
+**Agents** = autonomous agents with a control panel + linked chat. TA is a **chat**, not an agent.
 
 ## Surfaces
 
-- **Chats:** Prebuilt message threads using existing `AgentRunView`, portfolio/citation cards, and plan cards.
-  - **Swap · Bridge · Lend** is **one** multi-step saga with multi-wallet signing (Trading signs swap+bridge; Solana signs lend execute — not discovery-only).
-- **Agents:** Control panel — what was asked, configuration, TA chart/signal when relevant, run activity feed.
-- **Dashboard:** Multi-wallet overview with group-by wallet + chain chips and drill-down.
+- **Swap · Bridge · Lend:** Ambiguous ask (“0.4 ETH into a Kamino vault”) → wallet clarification → **one LI.FI** Base→Solana source tx + **Kamino deposit** on Solana.
+- **Token / market research:** Broad brief (Twitter/CT, fundamentals, gov, risk) with citations.
+- **Technical analysis:** Chat with price-history tool + chart + search.
+- **DCA agent:** Asked + agent wallet + guard rails + allowed chains + activity; linked chat to change rules.
+- **Dashboard:** Multi-wallet overview with drill-down (includes DCA agent wallet).
 
 ## Data
 
