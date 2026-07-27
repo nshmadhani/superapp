@@ -10,7 +10,7 @@ export default function HomePage() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8 px-4 py-16">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">
-            Cipher
+            Ervo
           </h1>
           <p className="mt-2 max-w-md text-sm text-zinc-500">
             Research, move money, and run agents across your wallets. All in one

@@ -1,4 +1,4 @@
-# Cipher Phase 1 — Foundation Implementation Plan
+# Ervo Phase 1 — Foundation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -918,7 +918,7 @@ export async function quoteEvmSwap(
 ```ts
 // packages/agent/src/system-prompt.ts
 export const CIPHER_SYSTEM_PROMPT = `
-You are Cipher, a crypto co-pilot. You help users research markets and act on-chain through tools.
+You are Ervo, a crypto co-pilot. You help users research markets and act on-chain through tools.
 
 Rules:
 - Prefer tools over guessing balances, prices, or protocol state.
@@ -1017,7 +1017,7 @@ Pin model id to whatever OpenRouter tool-capable model you prefer; keep it in en
 
 ```bash
 git add packages/agent
-git commit -m "feat(agent): tool-driven Cipher agent with confirm-gated plans"
+git commit -m "feat(agent): tool-driven Ervo agent with confirm-gated plans"
 ```
 
 ---

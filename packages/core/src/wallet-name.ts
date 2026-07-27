@@ -15,7 +15,7 @@ export function walletDisplayName(w: {
 }): string {
   const cleaned = cleanWalletName(w.label);
   if (cleaned) return cleaned;
-  if (w.source === "turnkey") return "Cipher";
+  if (w.source === "turnkey") return "Ervo";
   if (w.source === "external") return "Connected";
   return "Wallet";
 }

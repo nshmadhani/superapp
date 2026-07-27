@@ -11,7 +11,7 @@ export function createPlanTool(ctx: AgentContext) {
     description:
       "Create a confirm-gated transfer plan via LI.FI only (same-chain swap or cross-chain bridge, including to HyperEVM chain id 999). Do not use other bridges. Works for EVM and Solana sources. Stores plan hash and returns confirmId + review payload. Does not send a transaction. User must click Confirm in the UI before execute_plan.",
     inputSchema: z.object({
-      walletId: z.string().describe("Cipher wallet id from list_wallets (source)"),
+      walletId: z.string().describe("Ervo wallet id from list_wallets (source)"),
       fromChainId: z
         .number()
         .int()

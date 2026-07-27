@@ -25,16 +25,14 @@ import {
   DemoMultiStepCard,
   type MultiStepPlan,
 } from "./demo-multi-step-card";
+import {
+  DemoResearchCard,
+  type ResearchSnapshot,
+} from "./demo-research-card";
 import { DemoTaCard, type TaSnapshot } from "./demo-ta-card";
 import { PriceChart } from "./sparkline";
 import { getDemoChat } from "@/lib/demo/fixtures";
 import { useDemoPlayback } from "@/lib/demo/use-demo-playback";
-import { isTaLiveChat, TaLiveSession } from "./ta-live-session";
-import {
-  isResearchLiveChat,
-  ResearchLiveSession,
-} from "./research-live-session";
-import { isDcaLiveChat, DcaLiveSession } from "./dca-live-session";
 
 function extractMultiStepPlans(parts: UIMessage["parts"]): MultiStepPlan[] {
   const out: MultiStepPlan[] = [];
@@ -78,6 +76,16 @@ function extractTaSnapshot(parts: UIMessage["parts"]): TaSnapshot | null {
   return null;
 }
 
+function extractResearchSnapshot(
+  parts: UIMessage["parts"],
+): ResearchSnapshot | null {
+  for (const part of parts ?? []) {
+    const output = toolOutput(part) as ResearchSnapshot | undefined;
+    if (output?.type === "research_snapshot") return output;
+  }
+  return null;
+}
+
 function DemoMessage({
   message,
   isLastAssistant,
@@ -97,6 +105,7 @@ function DemoMessage({
   const clarifications = extractClarifications(message.parts);
   const price = extractPriceSeries(message.parts);
   const ta = extractTaSnapshot(message.parts);
+  const research = extractResearchSnapshot(message.parts);
   const text = textFromParts(message.parts);
   const showAgent =
     message.role === "assistant" &&
@@ -133,20 +142,32 @@ function DemoMessage({
         </div>
       )}
       {price && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-3">
+        <div
+          className={`rounded-xl border px-3 py-3 ${
+            (price.changePct ?? 0) >= 0
+              ? "border-emerald-500/25 bg-gradient-to-br from-emerald-500/10 via-zinc-900/80 to-zinc-950"
+              : "border-rose-500/25 bg-gradient-to-br from-rose-500/10 via-zinc-900/80 to-zinc-950"
+          }`}
+        >
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+            <p
+              className={`text-[11px] font-medium uppercase tracking-wide ${
+                (price.changePct ?? 0) >= 0
+                  ? "text-emerald-300/80"
+                  : "text-rose-300/80"
+              }`}
+            >
               {price.symbol} · {price.timeframe ?? "1D"} · OHLCV
             </p>
             {price.last != null && (
-              <p className="font-mono text-sm text-zinc-200">
+              <p className="font-mono text-sm text-zinc-100">
                 ${price.last.toFixed(2)}
                 {price.changePct != null && (
                   <span
                     className={
                       price.changePct >= 0
                         ? "ml-2 text-emerald-400"
-                        : "ml-2 text-red-400"
+                        : "ml-2 text-rose-400"
                     }
                   >
                     {price.changePct >= 0 ? "+" : ""}
@@ -161,6 +182,7 @@ function DemoMessage({
       )}
       <CitationsCard hits={citations} />
       {ta && <DemoTaCard snap={ta} />}
+      {research && <DemoResearchCard snap={research} />}
       {text && (
         <div className="px-1 py-1 text-sm text-zinc-200">
           <Markdown>{text}</Markdown>
@@ -186,15 +208,6 @@ function DemoMessage({
 }
 
 export function DemoChatPanel({ chatId }: { chatId: string }) {
-  if (isTaLiveChat(chatId)) {
-    return <TaLiveSession />;
-  }
-  if (isResearchLiveChat(chatId)) {
-    return <ResearchLiveSession />;
-  }
-  if (isDcaLiveChat(chatId)) {
-    return <DcaLiveSession />;
-  }
   return <FixtureChatPanel chatId={chatId} />;
 }
 

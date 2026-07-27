@@ -32,7 +32,7 @@ export function Sidebar() {
           className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-sm font-semibold text-zinc-100 hover:bg-zinc-900"
         >
           <MessageSquare className="size-4 text-zinc-400" />
-          Cipher
+          Ervo
         </Link>
       </div>
 

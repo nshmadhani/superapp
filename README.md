@@ -1,4 +1,4 @@
-# Cipher
+# Ervo
 
 AI crypto co-pilot — research and act through tools (no hardcoded flows).
 

@@ -1,4 +1,4 @@
-# Cipher — Seeded product demo (branch)
+# Ervo — Seeded product demo (branch)
 
 **Date:** 2026-07-26  
 **Branch:** `cursor/yc-scripted-demo-54c0`  
@@ -6,7 +6,7 @@
 
 ## Intent
 
-Cipher UI that looks like the real product — preloaded chats, one autonomous agent, and dashboard. No auth / env / live chain required on this branch. Chat URLs use UUIDs.
+Ervo UI that looks like the real product — preloaded chats, one autonomous agent, and dashboard. No auth / env / live chain required on this branch. Chat URLs use UUIDs.
 
 ## Information architecture
 

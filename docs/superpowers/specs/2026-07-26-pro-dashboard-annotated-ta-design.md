@@ -1,7 +1,7 @@
 # Demo polish: Pro dashboard + annotated TA simple chart
 
 Date: 2026-07-26  
-Scope: Seeded Cipher YC demo (`apps/web` demo surfaces only)
+Scope: Seeded Ervo YC demo (`apps/web` demo surfaces only)
 
 ## Goals
 

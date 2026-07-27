@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Cipher",
+  title: "Ervo",
   description: "AI crypto co-pilot",
 };
 

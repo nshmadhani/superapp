@@ -6,7 +6,7 @@
 
 ## Goal
 
-Cipher uses **LI.FI as the universal transfer adapter**. Cipher owns confirm-gated Plans; the LiFi SDK owns routing and execution after the user confirms.
+Ervo uses **LI.FI as the universal transfer adapter**. Ervo owns confirm-gated Plans; the LiFi SDK owns routing and execution after the user confirms.
 
 ## Trust boundary
 

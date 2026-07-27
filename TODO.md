@@ -1,4 +1,4 @@
-# Cipher — TODO
+# Ervo — TODO
 
 Working decisions from design review (2026-07-25). Spec updated: `docs/superpowers/specs/2026-07-25-ai-crypto-wallet-design.md`. Vision doc: `VISION.md`.
 
@@ -6,7 +6,7 @@ Working decisions from design review (2026-07-25). Spec updated: `docs/superpowe
 
 - [x] **Wallet provider:** Turnkey — one provider for app-created wallets; **external wallets just connect** (WalletConnect / injected)
 - [x] **VenueAccount:** Hyperliquid + Polymarket only
-- [x] **Jupiter (incl. Kalshi path):** no VenueAccount — use connected Solana wallet + positions; Cipher integrates Jupiter (not DFlow directly)
+- [x] **Jupiter (incl. Kalshi path):** no VenueAccount — use connected Solana wallet + positions; Ervo integrates Jupiter (not DFlow directly)
 - [x] **Secrets / venue session material:** Supabase
 - [x] **Gas:** relayer + paymaster
 - [x] **Multi-leg plans:** persist plan/steps (Supabase); saga-style resume
@@ -29,7 +29,7 @@ Working decisions from design review (2026-07-25). Spec updated: `docs/superpowe
 - [ ] **Phase 4 plan** — paymaster/relayer + yield execute + recovery tooling
 - [x] **Execute Phase 1 scaffold** — monorepo, packages, chat/dashboard, tool agent, tests + web build green (branch `feat/cipher-phase1`)
 - [x] **Wire live env** — OpenRouter + Zerion + Tavily + LiFi (+ Turnkey) in `.env.local`
-- [x] **Local Cipher Supabase** via CLI on ports 5442x (not other apps’ stacks)
+- [x] **Local Ervo Supabase** via CLI on ports 5442x (not other apps’ stacks)
 - [x] **Persist plans/wallets to Supabase** when env set (`packages/agent` `store.ts`); memory fallback otherwise
 - [x] **Phase 1 demos 1–3 wiring** — agent uses auth user wallets; portfolio ownership check; research citations UI; confirm-gated swap (`POST /api/plans/:id/confirm` + Turnkey sign)
 - [ ] **Manual smoke** — login → portfolio chat≡dashboard → research cites → swap review Confirm & sign

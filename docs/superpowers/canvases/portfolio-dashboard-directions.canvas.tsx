@@ -564,7 +564,7 @@ export default function PortfolioDashboardDirections() {
       <Stack gap={8}>
         <H1>Portfolio dashboard directions</H1>
         <Text tone="secondary">
-          Cipher vision: one place to answer “where is my money?” across wallets, chains, and
+          Ervo vision: one place to answer “where is my money?” across wallets, chains, and
           venues — with chat + dashboard parity. Below: research patterns, three selectable
           mockups (demo fixture numbers), and a recommendation. Pick A/B/C; we infuse later.
         </Text>
@@ -584,7 +584,7 @@ export default function PortfolioDashboardDirections() {
             <CardBody>
               <Text size="small">
                 Beautiful single-wallet world: big balance, token list, chain context. Weak at
-                multi-wallet consolidation — Cipher’s problem is the opposite (many wallets).
+                multi-wallet consolidation — Ervo’s problem is the opposite (many wallets).
               </Text>
             </CardBody>
           </Card>
@@ -611,14 +611,14 @@ export default function PortfolioDashboardDirections() {
             <CardBody>
               <Text size="small">
                 Consolidation layer: one surface over many protocols / multi-chain abstraction.
-                Closest spiritual cousin to Cipher’s “home for crypto” — UI often more map than
+                Closest spiritual cousin to Ervo’s “home for crypto” — UI often more map than
                 spreadsheet.
               </Text>
             </CardBody>
           </Card>
         </Grid>
         <Text size="small" tone="tertiary">
-          Source: product pattern recall vs Cipher VISION.md + §3.2 Dashboard (multi-wallet worlds,
+          Source: product pattern recall vs Ervo VISION.md + §3.2 Dashboard (multi-wallet worlds,
           VenueAccounts, chat parity). Demo fixtures: Trading / Solana / Vault / DCA · ~$53.5k.
         </Text>
       </Stack>
@@ -713,7 +713,7 @@ export default function PortfolioDashboardDirections() {
       </Stack>
 
       <Stack gap={10}>
-        <H2>Fit to Cipher (scorecard)</H2>
+        <H2>Fit to Ervo (scorecard)</H2>
         <Table
           headers={["Criterion", "A Worlds", "B Group-by", "C Map"]}
           columnAlign={["left", "center", "center", "center"]}

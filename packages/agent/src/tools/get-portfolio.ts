@@ -19,7 +19,7 @@ export function getPortfolioTool(ctx: AgentContext) {
       walletId: z
         .string()
         .optional()
-        .describe("Cipher wallet id from list_wallets (preferred)"),
+        .describe("Ervo wallet id from list_wallets (preferred)"),
       address: z
         .string()
         .optional()

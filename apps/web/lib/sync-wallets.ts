@@ -21,11 +21,11 @@ function labelForWallet(
 ): string {
   const cleaned = cleanWalletName(wallet.walletName);
   if (cleaned) return cleaned;
-  return source === "turnkey" ? "Cipher" : "Connected";
+  return source === "turnkey" ? "Ervo" : "Connected";
 }
 
 /**
- * Persist Turnkey wallets into Cipher Supabase for the agent/tools.
+ * Persist Turnkey wallets into Ervo Supabase for the agent/tools.
  * Default: embedded only — never auto-import browser extensions.
  * Use mode "connected" after the user explicitly clicks Connect.
  */

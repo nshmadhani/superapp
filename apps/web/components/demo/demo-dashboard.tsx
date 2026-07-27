@@ -6,34 +6,61 @@ import { walletDisplayName } from "@/lib/wallet-display";
 
 const OVERVIEW = "__overview__";
 
-type Depth = "glance" | "portfolio" | "pro";
-
-const DEPTHS: Array<{ id: Depth; label: string; hint: string }> = [
-  { id: "glance", label: "Glance", hint: "One number, top holdings, plain take" },
-  {
-    id: "portfolio",
-    label: "Portfolio",
-    hint: "Wallets, allocation, holdings table",
-  },
-  {
-    id: "pro",
-    label: "Pro",
-    hint: "Charts, KPIs, filters, full position tree",
-  },
-];
-
-const CHART_COLORS = [
-  "#a1a1aa",
-  "#71717a",
-  "#d4d4d8",
-  "#52525b",
-  "#e4e4e7",
-  "#3f3f46",
-  "#fafafa",
-  "#27272a",
-];
-
 const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "aUSDC"]);
+
+const TOKEN_META: Record<
+  string,
+  { color: string; bg: string; label: string }
+> = {
+  ETH: { color: "#627EEA", bg: "#627EEA33", label: "ETH" },
+  SOL: { color: "#14F195", bg: "#9945FF33", label: "SOL" },
+  USDC: { color: "#2775CA", bg: "#2775CA33", label: "$" },
+  aUSDC: { color: "#B6509E", bg: "#B6509E33", label: "a$" },
+  cbBTC: { color: "#F7931A", bg: "#F7931A33", label: "₿" },
+  JUP: { color: "#C7F284", bg: "#C7F28433", label: "J" },
+};
+
+const CHAIN_COLORS: Record<string, string> = {
+  ethereum: "#627EEA",
+  base: "#0052FF",
+  solana: "#14F195",
+};
+
+function tokenMeta(symbol: string) {
+  return (
+    TOKEN_META[symbol] ?? {
+      color: "#a1a1aa",
+      bg: "#27272a",
+      label: symbol.slice(0, 1),
+    }
+  );
+}
+
+function TokenIcon({
+  symbol,
+  size = 22,
+}: {
+  symbol: string;
+  size?: number;
+}) {
+  const meta = tokenMeta(symbol);
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: meta.bg,
+        color: meta.color,
+        fontSize: Math.max(9, size * 0.38),
+        boxShadow: `inset 0 0 0 1px ${meta.color}55, 0 0 18px ${meta.color}22`,
+      }}
+      aria-hidden
+    >
+      {meta.label}
+    </span>
+  );
+}
 
 function usd(n: number | null | undefined) {
   if (n == null) return "n/a";
@@ -45,35 +72,12 @@ function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function healthLine(
-  byAsset: Array<{ symbol: string; value: number; name: string }>,
-  total: number,
-): string {
-  if (total <= 0 || byAsset.length === 0) return "No positions loaded.";
-  const top = byAsset[0]!;
-  const topPct = (top.value / total) * 100;
-  const stables = byAsset.filter((a) => STABLE_SYMBOLS.has(a.symbol));
-  const stablePct =
-    (stables.reduce((s, a) => s + a.value, 0) / total) * 100;
-
-  if (stablePct >= 35) {
-    return `Mostly cash-like: about ${stablePct.toFixed(0)}% in stables, with ${top.symbol} as the largest risk sleeve.`;
-  }
-  if (topPct >= 40) {
-    return `Concentrated in ${top.symbol} (~${topPct.toFixed(0)}% of net worth). The rest is spread thinner.`;
-  }
-  return `Balanced across ${byAsset.length} assets. Largest sleeve is ${top.symbol} at ~${topPct.toFixed(0)}%.`;
-}
-
-/** Deterministic illustrative equity path scaled to current net worth. */
 function seedEquitySeries(total: number, points = 30): number[] {
   const out: number[] = [];
-  let v = total * 0.86;
   for (let i = 0; i < points; i++) {
     const wobble =
       Math.sin(i * 0.55) * 0.012 + Math.cos(i * 0.21) * 0.008 + i * 0.0042;
-    v = total * (0.86 + wobble);
-    out.push(Math.max(v, total * 0.75));
+    out.push(Math.max(total * (0.86 + wobble), total * 0.75));
   }
   out[out.length - 1] = total;
   return out;
@@ -83,47 +87,59 @@ function AllocationBars({
   title,
   rows,
   total,
+  kind,
 }: {
   title: string;
   rows: Array<{ label: string; value: number }>;
   total: number;
+  kind: "asset" | "chain";
 }) {
   const slices = rows.filter((r) => r.value > 0).slice(0, 8);
   return (
-    <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-3">
+    <div className="rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900 px-3 py-3">
       <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         {title}
       </p>
-      <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-800">
-        {slices.map((s, i) => {
+      <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-800/80">
+        {slices.map((s) => {
           const pct = total > 0 ? (s.value / total) * 100 : 0;
+          const color =
+            kind === "asset"
+              ? tokenMeta(s.label).color
+              : (CHAIN_COLORS[s.label] ?? "#71717a");
           return (
             <div
               key={s.label}
               title={`${s.label} ${pct.toFixed(1)}%`}
               style={{
                 width: `${Math.max(pct, 1.5)}%`,
-                backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                backgroundColor: color,
               }}
             />
           );
         })}
       </div>
       <ul className="mt-3 space-y-1.5">
-        {slices.map((s, i) => {
+        {slices.map((s) => {
           const pct = total > 0 ? (s.value / total) * 100 : 0;
+          const color =
+            kind === "asset"
+              ? tokenMeta(s.label).color
+              : (CHAIN_COLORS[s.label] ?? "#71717a");
           return (
             <li
               key={s.label}
               className="flex items-center justify-between gap-2 text-xs"
             >
-              <span className="flex items-center gap-2 text-zinc-300">
-                <span
-                  className="inline-block size-2 shrink-0 rounded-sm"
-                  style={{
-                    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
-                  }}
-                />
+              <span className="flex items-center gap-2 text-zinc-200">
+                {kind === "asset" ? (
+                  <TokenIcon symbol={s.label} size={18} />
+                ) : (
+                  <span
+                    className="inline-block size-2.5 shrink-0 rounded-sm"
+                    style={{ backgroundColor: color }}
+                  />
+                )}
                 {s.label}
               </span>
               <span className="font-mono text-zinc-500">
@@ -157,10 +173,10 @@ function EquitySparkline({ series }: { series: number[] }) {
   const up = deltaPct >= 0;
 
   return (
-    <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-3">
+    <div className="rounded-lg border border-emerald-500/15 bg-gradient-to-br from-emerald-500/5 to-zinc-950 px-3 py-3">
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-          Equity · 30d (illustrative)
+          Equity · 30d
         </p>
         <p
           className={`font-mono text-xs ${up ? "text-emerald-400" : "text-red-400"}`}
@@ -173,7 +189,7 @@ function EquitySparkline({ series }: { series: number[] }) {
         viewBox={`0 0 ${w} ${h}`}
         className="mt-2 h-12 w-full"
         role="img"
-        aria-label="Illustrative equity sparkline"
+        aria-label="Equity sparkline"
       >
         <polyline
           points={pts}
@@ -184,9 +200,6 @@ function EquitySparkline({ series }: { series: number[] }) {
           strokeLinecap="round"
         />
       </svg>
-      <p className="mt-1 text-[10px] text-zinc-600">
-        Seeded path for the demo, scaled to current net worth. Not live PnL.
-      </p>
     </div>
   );
 }
@@ -194,7 +207,6 @@ function EquitySparkline({ series }: { series: number[] }) {
 export function DemoDashboard() {
   const overview = useMemo(() => demoPortfolioOverview(), []);
   const [selected, setSelected] = useState<string>(OVERVIEW);
-  const [depth, setDepth] = useState<Depth>("glance");
   const [chainFilter, setChainFilter] = useState<string>("all");
   const [hideDust, setHideDust] = useState(true);
 
@@ -255,15 +267,11 @@ export function DemoDashboard() {
     return rows;
   }, [rawPositions, chainFilter, hideDust]);
 
-  const topHoldings = byAsset.slice(0, 5);
-  const vibe = healthLine(byAsset, overview.totalValueUsd);
   const chains = useMemo(
     () => [...new Set(overview.positions.map((p) => p.chainId))].sort(),
     [overview.positions],
   );
 
-  const proScopeTotal =
-    selected === OVERVIEW ? overview.totalValueUsd : total;
   const proAssets = useMemo(() => {
     if (selected === OVERVIEW) {
       return byAsset.map((a) => ({ label: a.symbol, value: a.value }));
@@ -291,15 +299,13 @@ export function DemoDashboard() {
   }, [selected, byChain, rawPositions]);
 
   const topAssetPct =
-    proScopeTotal > 0 && proAssets[0]
-      ? (proAssets[0].value / proScopeTotal) * 100
-      : 0;
+    total > 0 && proAssets[0] ? (proAssets[0].value / total) * 100 : 0;
   const stablePct =
-    proScopeTotal > 0
+    total > 0
       ? (rawPositions
           .filter((p) => STABLE_SYMBOLS.has(p.symbol))
           .reduce((s, p) => s + p.valueUsd, 0) /
-          proScopeTotal) *
+          total) *
         100
       : 0;
   const equity = useMemo(
@@ -310,346 +316,224 @@ export function DemoDashboard() {
   return (
     <div className="cipher-scroll h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8">
-        <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_80px_rgba(0,0,0,0.28)]">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-white">
-                Dashboard
-              </h1>
-              <p className="text-sm text-zinc-500">
-                {DEPTHS.find((d) => d.id === depth)?.hint}
-              </p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Dashboard
+            </h1>
+            <p className="text-sm text-zinc-500">
+              Charts, wallets, filters, and the full position tree.
+            </p>
             </div>
-            <div
-              className="inline-flex rounded-lg border border-zinc-800 bg-zinc-950 p-0.5"
-              role="tablist"
-              aria-label="Dashboard depth"
-            >
-              {DEPTHS.map((d) => {
-                const on = depth === d.id;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={on}
-                    onClick={() => setDepth(d.id)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      on
-                        ? "bg-zinc-100 text-zinc-900"
-                        : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                );
-              })}
-            </div>
+            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-sky-300">
+              Pro
+            </span>
           </div>
 
-          <div>
+          <div className="rounded-xl border border-zinc-800/80 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 px-4 py-4">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-              {depth === "glance" ? "Net worth · all wallets" : title}
+              {title}
             </p>
-            <p className="text-3xl font-semibold text-white">
-              {usd(depth === "glance" ? overview.totalValueUsd : total)}
-            </p>
-            {depth === "glance" && (
-              <p className="mt-2 max-w-xl text-sm leading-relaxed text-zinc-400">
-                {vibe}
-              </p>
-            )}
+            <p className="text-3xl font-semibold text-white">{usd(total)}</p>
           </div>
 
-          {depth === "pro" && (
-            <>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AllocationBars
-                  title="Asset allocation"
-                  total={proScopeTotal}
-                  rows={proAssets}
-                />
-                <AllocationBars
-                  title="Chain allocation"
-                  total={proScopeTotal}
-                  rows={proChains}
-                />
-              </div>
-              <div className="grid gap-3 lg:grid-cols-3">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-2">
-                  <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Concentration
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {topAssetPct.toFixed(0)}%
-                    </p>
-                    <p className="text-[11px] text-zinc-600">
-                      Top sleeve
-                      {proAssets[0] ? ` · ${proAssets[0].label}` : ""}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Stables
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {stablePct.toFixed(0)}%
-                    </p>
-                    <p className="text-[11px] text-zinc-600">Cash-like share</p>
-                  </div>
-                  <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Wallets
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {selected === OVERVIEW ? overview.wallets.length : 1}
-                    </p>
-                    <p className="text-[11px] text-zinc-600">In this view</p>
-                  </div>
-                  <div className="rounded-lg border border-zinc-800 bg-black/30 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Chains
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {proChains.length}
-                    </p>
-                    <p className="text-[11px] text-zinc-600">Active networks</p>
-                  </div>
-                </div>
-                <EquitySparkline series={equity} />
-              </div>
-            </>
-          )}
+          <div className="grid gap-3 sm:grid-cols-2">
+            <AllocationBars
+              title="Asset allocation"
+              total={total}
+              rows={proAssets}
+              kind="asset"
+            />
+            <AllocationBars
+              title="Chain allocation"
+              total={total}
+              rows={proChains}
+              kind="chain"
+            />
+          </div>
 
-          {depth === "glance" && (
-            <div className="space-y-3">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-                Top holdings
-              </p>
-              <ul className="space-y-2">
-                {topHoldings.map((row) => {
-                  const pct =
-                    overview.totalValueUsd > 0
-                      ? (row.value / overview.totalValueUsd) * 100
-                      : 0;
-                  return (
-                    <li key={row.symbol} className="space-y-1">
-                      <div className="flex items-baseline justify-between gap-3 text-sm">
-                        <span className="text-zinc-100">
-                          {row.symbol}
-                          <span className="ml-2 text-xs text-zinc-500">
-                            {row.name}
-                          </span>
-                        </span>
-                        <span className="font-mono text-xs text-zinc-300">
-                          {usd(row.value)}
-                          <span className="ml-2 text-zinc-600">
-                            {pct.toFixed(0)}%
-                          </span>
-                        </span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                        <div
-                          className="h-full rounded-full bg-zinc-400"
-                          style={{ width: `${Math.max(pct, 2)}%` }}
-                        />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="text-xs text-zinc-600">
-                Dust under $50 is hidden. Switch to Portfolio or Pro for wallet
-                drill-down.
-              </p>
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-2">
+              <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 px-3 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Concentration
+                </p>
+                <p className="mt-1 font-mono text-lg text-zinc-100">
+                  {topAssetPct.toFixed(0)}%
+                </p>
+                <p className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+                  Top sleeve
+                  {proAssets[0] && (
+                    <>
+                      <TokenIcon symbol={proAssets[0].label} size={14} />
+                      {proAssets[0].label}
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Stables
+                </p>
+                <p className="mt-1 font-mono text-lg text-sky-300">
+                  {stablePct.toFixed(0)}%
+                </p>
+                <p className="text-[11px] text-zinc-600">Cash-like share</p>
+              </div>
+              <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Wallets
+                </p>
+                <p className="mt-1 font-mono text-lg text-zinc-100">
+                  {selected === OVERVIEW ? overview.wallets.length : 1}
+                </p>
+                <p className="text-[11px] text-zinc-600">In this view</p>
+              </div>
+              <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-3">
+                <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                  Chains
+                </p>
+                <p className="mt-1 font-mono text-lg text-zinc-100">
+                  {proChains.length}
+                </p>
+                <p className="text-[11px] text-zinc-600">Active networks</p>
+              </div>
+            </div>
+            <EquitySparkline series={equity} />
+          </div>
+
+          <label className="block text-sm text-zinc-400">
+            <span className="mr-2">Wallet</span>
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-white"
+            >
+              <option value={OVERVIEW}>Overview · all wallets</option>
+              {DEMO_WALLETS.map((w) => (
+                <option key={w.walletId} value={w.address}>
+                  {walletDisplayName(w)} ·{" "}
+                  {w.chainFamily === "solana" ? "SOL" : "EVM"}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selected === OVERVIEW && (
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              {overview.wallets.map((w) => (
+                <button
+                  key={w.walletId}
+                  type="button"
+                  onClick={() => setSelected(w.address)}
+                  className="rounded-lg border border-zinc-800 bg-gradient-to-br from-black/60 to-zinc-900/70 px-3 py-3 text-left transition-colors hover:border-zinc-600"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm font-medium text-white">
+                      {walletDisplayName(w)}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
+                        w.chainFamily === "solana"
+                          ? "bg-emerald-500/15 text-emerald-300"
+                          : "bg-indigo-500/15 text-indigo-300"
+                      }`}
+                    >
+                      {w.chainFamily === "solana" ? "SOL" : "EVM"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-lg font-semibold text-zinc-100">
+                    {usd(w.totalValueUsd)}
+                  </p>
+                  <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                    {shortAddr(w.address)}
+                  </p>
+                </button>
+              ))}
             </div>
           )}
 
-          {depth !== "glance" && (
-            <label className="block text-sm text-zinc-400">
-              <span className="mr-2">Wallet</span>
+          <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
+            <label className="flex items-center gap-1.5">
+              <span>Chain</span>
               <select
-                value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-                className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-white"
+                value={chainFilter}
+                onChange={(e) => setChainFilter(e.target.value)}
+                className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-200"
               >
-                <option value={OVERVIEW}>Overview · all wallets</option>
-                {DEMO_WALLETS.map((w) => (
-                  <option key={w.walletId} value={w.address}>
-                    {walletDisplayName(w)} ·{" "}
-                    {w.chainFamily === "solana" ? "SOL" : "EVM"}
+                <option value="all">All</option>
+                {chains.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
                   </option>
                 ))}
               </select>
             </label>
-          )}
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={hideDust}
+                onChange={(e) => setHideDust(e.target.checked)}
+                className="rounded border-zinc-700"
+              />
+              Hide dust (&lt;$50)
+            </label>
+          </div>
 
-          {depth !== "glance" && selected === OVERVIEW && (
-            <>
-              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {overview.wallets.map((w) => (
-                  <button
-                    key={w.walletId}
-                    type="button"
-                    onClick={() => setSelected(w.address)}
-                    className="rounded-lg border border-zinc-800 bg-black/40 px-3 py-3 text-left transition-colors hover:border-zinc-600"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-white">
-                        {walletDisplayName(w)}
-                      </span>
-                      <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
-                        {w.chainFamily === "solana" ? "SOL" : "EVM"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-lg font-semibold text-zinc-100">
-                      {usd(w.totalValueUsd)}
-                    </p>
-                    {depth === "pro" && (
-                      <p className="mt-1 font-mono text-[10px] text-zinc-600">
-                        {shortAddr(w.address)}
-                      </p>
-                    )}
-                  </button>
-                ))}
-              </div>
-              {depth === "portfolio" && (
-                <div className="flex flex-wrap gap-2">
-                  {byChain.map(([chain, value]) => (
-                    <span
-                      key={chain}
-                      className="rounded-full border border-zinc-800 px-2.5 py-1 text-[11px] text-zinc-400"
-                    >
-                      {chain}{" "}
-                      <span className="text-zinc-200">{usd(value)}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {depth === "pro" && (
-            <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-              <label className="flex items-center gap-1.5">
-                <span>Chain</span>
-                <select
-                  value={chainFilter}
-                  onChange={(e) => setChainFilter(e.target.value)}
-                  className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-200"
+          <table className="w-full text-left text-sm">
+            <thead className="text-zinc-500">
+              <tr>
+                <th className="py-2 font-medium">Asset</th>
+                <th className="font-medium">Wallet</th>
+                <th className="font-medium">Address</th>
+                <th className="font-medium">Chain</th>
+                <th className="font-medium">Qty</th>
+                <th className="font-medium">USD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {positions.map((p, i) => (
+                <tr
+                  key={`${p.symbol}-${p.walletAddress}-${i}`}
+                  className="border-t border-zinc-800 transition-colors hover:bg-white/[0.02]"
                 >
-                  <option value="all">All</option>
-                  {chains.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
-                  checked={hideDust}
-                  onChange={(e) => setHideDust(e.target.checked)}
-                  className="rounded border-zinc-700"
-                />
-                Hide dust (&lt;$50)
-              </label>
-            </div>
-          )}
-
-          {depth !== "glance" && (
-            <table className="w-full text-left text-sm">
-              <thead className="text-zinc-500">
-                <tr>
-                  <th className="py-2 font-medium">Asset</th>
-                  {(selected === OVERVIEW || depth === "pro") && (
-                    <th className="font-medium">Wallet</th>
-                  )}
-                  {depth === "pro" && (
-                    <th className="font-medium">Address</th>
-                  )}
-                  <th className="font-medium">Chain</th>
-                  <th className="font-medium">Qty</th>
-                  <th className="font-medium">USD</th>
+                  <td className="py-2 text-white">
+                    <span className="inline-flex items-center gap-2">
+                      <TokenIcon symbol={p.symbol} size={20} />
+                      <span>
+                        {p.symbol}
+                        <span className="ml-2 text-zinc-500">{p.name}</span>
+                      </span>
+                    </span>
+                  </td>
+                  <td className="text-zinc-300">
+                    {walletDisplayName({ label: p.walletLabel })}
+                  </td>
+                  <td className="font-mono text-[11px] text-zinc-500">
+                    {shortAddr(p.walletAddress)}
+                  </td>
+                  <td>
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[11px]"
+                      style={{
+                        color: CHAIN_COLORS[p.chainId] ?? "#a1a1aa",
+                        backgroundColor: `${CHAIN_COLORS[p.chainId] ?? "#71717a"}22`,
+                      }}
+                    >
+                      {p.chainId}
+                    </span>
+                  </td>
+                  <td className="font-mono text-zinc-300">{p.quantity}</td>
+                  <td className="text-zinc-300">{usd(p.valueUsd)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {positions.map((p, i) => (
-                  <tr
-                    key={`${p.symbol}-${p.walletAddress}-${i}`}
-                    className="border-t border-zinc-800"
-                  >
-                    <td className="py-2 text-white">
-                      {p.symbol}
-                      <span className="ml-2 text-zinc-500">{p.name}</span>
-                    </td>
-                    {(selected === OVERVIEW || depth === "pro") && (
-                      <td className="text-zinc-300">
-                        {walletDisplayName({ label: p.walletLabel })}
-                      </td>
-                    )}
-                    {depth === "pro" && (
-                      <td className="font-mono text-[11px] text-zinc-500">
-                        {shortAddr(p.walletAddress)}
-                      </td>
-                    )}
-                    <td className="text-zinc-300">{p.chainId}</td>
-                    <td className="font-mono text-zinc-300">{p.quantity}</td>
-                    <td className="text-zinc-300">{usd(p.valueUsd)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
 
-        {depth === "portfolio" && selected === OVERVIEW && (
-          <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
-            <div>
-              <h2 className="text-sm font-medium text-zinc-100">
-                Same money, by asset
-              </h2>
-              <p className="mt-1 text-xs text-zinc-500">
-                Extra view under the main table. Easy scan of where each token
-                stacks up.
-              </p>
-            </div>
-            <ul className="space-y-2">
-              {byAsset.map((row) => {
-                const pct =
-                  overview.totalValueUsd > 0
-                    ? (row.value / overview.totalValueUsd) * 100
-                    : 0;
-                return (
-                  <li key={row.symbol} className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-3 text-sm">
-                      <span className="text-zinc-100">
-                        {row.symbol}
-                        <span className="ml-2 text-xs text-zinc-500">
-                          {row.name} · {row.wallets} spots
-                        </span>
-                      </span>
-                      <span className="font-mono text-xs text-zinc-300">
-                        {usd(row.value)}
-                      </span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                      <div
-                        className="h-full rounded-full bg-zinc-400"
-                        style={{ width: `${Math.max(pct, 2)}%` }}
-                      />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        )}
-
-        {depth === "pro" && selected === OVERVIEW && (
-          <div className="space-y-3 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5">
+        {selected === OVERVIEW && (
+          <div className="space-y-3 rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900/50 to-zinc-950 p-5">
             <div>
               <h2 className="text-sm font-medium text-zinc-100">
                 Position tree
@@ -672,7 +556,7 @@ export function DemoDashboard() {
                       {usd(w.totalValueUsd)}
                     </p>
                   </div>
-                  <ul className="ml-2 space-y-1 border-l border-zinc-800 pl-3">
+                  <ul className="ml-2 space-y-1.5 border-l border-zinc-800 pl-3">
                     {w.positions
                       .filter((p) => !hideDust || p.valueUsd >= 50)
                       .filter(
@@ -682,9 +566,10 @@ export function DemoDashboard() {
                       .map((p, i) => (
                         <li
                           key={`${p.symbol}-${i}`}
-                          className="flex flex-wrap items-baseline justify-between gap-2 text-xs"
+                          className="flex flex-wrap items-center justify-between gap-2 text-xs"
                         >
-                          <span className="text-zinc-300">
+                          <span className="inline-flex items-center gap-2 text-zinc-300">
+                            <TokenIcon symbol={p.symbol} size={16} />
                             <span className="text-zinc-500">{p.chainId}</span>
                             {" · "}
                             {p.symbol}

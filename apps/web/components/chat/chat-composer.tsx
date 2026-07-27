@@ -17,9 +17,9 @@ export function ChatComposer({
   onStop,
   busy,
   disabled,
-  placeholder = "Message Cipher…",
+  placeholder = "Message Ervo…",
   error,
-  footer = "Cipher can make mistakes. Review plans before executing.",
+  footer = "Ervo can make mistakes. Review plans before executing.",
 }: {
   value: string;
   onChange: (v: string) => void;

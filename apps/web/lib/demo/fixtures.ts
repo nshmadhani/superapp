@@ -293,6 +293,29 @@ export const DEMO_CHATS: DemoChat[] = [
       ),
       assistantMsg("d2", [
         toolPart(
+          "get_price_history",
+          {
+            type: "price_series",
+            symbol: "HYPE",
+            timeframe: "1D",
+            lookbackDays: 90,
+            source: "CoinGecko market_chart",
+            candleCount: 91,
+            series: hypeSeries,
+            last: 20.8,
+            changePct: -8.4,
+            high90: 32.4,
+            low90: 17.9,
+          },
+          "tc-research-price",
+          {
+            coin: "hyperliquid",
+            source: "coingecko",
+            timeframe: "1D",
+            lookbackDays: 90,
+          },
+        ),
+        toolPart(
           "web_search",
           {
             results: [
@@ -328,8 +351,46 @@ export const DEMO_CHATS: DemoChat[] = [
           },
           "tc-research-hype",
         ),
+        toolPart(
+          "synthesize_research",
+          {
+            type: "research_snapshot",
+            symbol: "HYPE",
+            last: 20.8,
+            changePct90: -8.4,
+            high90: 32.4,
+            low90: 17.9,
+            narrative:
+              "Volume leadership keeps bulls engaged, but unlock chatter and copycat-venue fear keep conviction split.",
+            sentiment: "High attention, split conviction",
+            thesis: "High-beta venue token, not a quiet compounder",
+            risks: [
+              "Unlock / distribution overhang",
+              "Venue concentration / regulatory headlines",
+              "Narrative rotation if volume cools",
+            ],
+            vsQuietBluechip:
+              "Vs UNI, HYPE trades on CT velocity and venue stats, while UNI trades on slower fee-switch and governance process.",
+            scores: {
+              attention: 9,
+              unlockRisk: 7,
+              volumeStrength: 8,
+              governanceSignal: 3,
+            },
+          },
+          "tc-research-synth",
+          {
+            lenses: [
+              "social narrative",
+              "venue fundamentals",
+              "unlock risk",
+              "bluechip comparison",
+            ],
+            note: "Blend market tape with CT and governance sources",
+          },
+        ),
         textPart(
-          "**HYPE - wide-angle research**\n\n### Narrative (Twitter / CT)\n- **Bulls:** Still the perps volume leader; “CEX killer” memes keep attention. Fee share / buyback chatter whenever volume prints hot.\n- **Bears:** Unlock calendar anxiety, competitor launches, and “what if OI migrates” threads every quiet week.\n- Sentiment is **loud but not one-sided** - good for trading attention, noisy for long-hold conviction.\n\n### Fundamentals / market structure\n- Product is the venue; HYPE is tied to **usage + staking / gas** more than a classic app-token flywheel.\n- Public dashboards still show **strong volume / OI** vs peers; that’s the core bull case.\n- Float and unlock pacing matter more than any single tweet - check Messari/unlock calendars before sizing.\n\n### Governance / DAO\n- Not a busy on-chain DAO like UNI/ARB. Expect **core-driven** roadmap; treat “governance alpha” as thin.\n\n### Risk flags\n1. Unlock / distribution overhang\n2. Venue concentration / regulatory headlines\n3. Narrative rotation if volume cools\n\n### Bottom line\nTrade it as a **high-beta venue token** with social amplification - not a quiet compounder. Want me to dig next into unlocks, competitor fee wars, or a wallet-sized risk brief?",
+          "**HYPE - wide-angle research**\n\nI pulled **90 daily closes from CoinGecko**, checked the core protocol / market sources, then stitched that together with the current CT loop.\n\n### What the street is actually trading\n- **Bulls:** still see Hyperliquid as the cleanest \"CEX killer\" meme in market structure terms. When volume or fee prints look strong, CT immediately jumps back to buyback / fee-share style speculation.\n- **Bears:** keep hammering the same three things: unlock overhang, venue concentration, and whether competitors can chip away at the attention premium.\n- Net result: attention is **high**, but conviction is **split**. That matters because HYPE trades more like a narrative-vol asset than a sleepy governance token.\n\n### What is moving price\n1. **Venue usage**: volume, fees, and open-interest chatter matter more than governance threads.\n2. **Unlock calendar**: large-transfer screenshots and float concerns can hit sentiment fast.\n3. **Narrative leadership**: if Hyperliquid still feels like the dominant venue story, HYPE gets bid harder than slower DeFi bluechips.\n4. **General risk mood**: when perps traders de-risk, HYPE usually feels it faster than a slower token like UNI.\n\n### Fundamentals / structure\n- The product is the venue. HYPE is tied to **usage + staking / gas**, not a classic app-token flywheel.\n- Public dashboards still show **strong volume / OI** relative to peers. That is the core bull case.\n- The live tape in this chat shows the token is still far below the **~$32.4** 90d high, which is why every bounce gets argued as either \"re-rating\" or just another attention reflex.\n\n### Governance / DAO\n- This is not a busy on-chain DAO like UNI or ARB.\n- Expect a more **core-driven** roadmap and thinner governance alpha.\n- If you are long, you are mostly underwriting venue relevance, not proposal flow.\n\n### Bottom line\nTrade it as a **high-beta venue token** with social amplification. Good if you want attention and catalyst velocity. Bad if you want a quiet compounder with clean long-duration governance cashflow.",
         ),
       ]),
       userMsg(
@@ -363,8 +424,41 @@ export const DEMO_CHATS: DemoChat[] = [
           },
           "tc-research-compare",
         ),
+        toolPart(
+          "synthesize_research",
+          {
+            type: "research_snapshot",
+            symbol: "HYPE",
+            last: 20.8,
+            changePct90: -8.4,
+            high90: 32.4,
+            low90: 17.9,
+            narrative:
+              "Unlock talk and volume-quality debate dominate CT, while UNI discussion stays slower and procedural.",
+            sentiment: "Drama-heavy HYPE vs process-heavy UNI",
+            thesis: "HYPE is a faster narrative trade than UNI",
+            risks: [
+              "Unlock headlines can reset sentiment intraday",
+              "If venue stats flatten, narrative premium compresses",
+              "CT can overreact to transfer screenshots",
+            ],
+            vsQuietBluechip:
+              "UNI holders track fee-switch and governance timing; HYPE holders track venue stats, sentiment velocity, and unlock chatter.",
+            scores: {
+              attention: 9,
+              unlockRisk: 7,
+              volumeStrength: 8,
+              governanceSignal: 3,
+            },
+          },
+          "tc-research-contrast",
+          {
+            compare: ["HYPE", "UNI"],
+            focus: ["social tempo", "catalysts", "holder workload"],
+          },
+        ),
         textPart(
-          "**HYPE vs UNI - research contrast**\n\n| | HYPE | UNI |\n|---|---|---|\n| Social | High velocity CT, drama cycles | Slower, governance-forum heavy |\n| Catalyst style | Volume prints, unlocks, memes | Fee switch / DAO votes |\n| Info diet | Twitter + dashboards | Forum + Tally + longform |\n| Holder job | Survive narrative whiplash | Track slow political process |\n\nRecent **Twitter drama** around HYPE clusters on unlocks and “is volume real / sticky.” UNI drama is quieter and procedural (fee switch pacing).\n\nI can keep this as a living brief - say the word and I’ll refresh social + gov sources anytime.",
+          "**HYPE vs UNI - research contrast**\n\n| | HYPE | UNI |\n|---|---|---|\n| Social tempo | High velocity CT, drama cycles | Slower, governance-forum heavy |\n| What moves price | Volume prints, unlocks, memes | Fee switch, DAO votes, longform policy debate |\n| Info diet | Twitter + dashboards + venue metrics | Forum + Tally + longform research |\n| Holder job | Survive narrative whiplash | Track slower political process |\n\nIf you own **HYPE**, your workload is basically checking whether the venue is still the hottest object in the room. If you own **UNI**, your workload is slower and more procedural. The current CT drama around HYPE is still the same loop: unlock screenshots, \"is volume sticky,\" and whether the venue can stay culturally dominant.\n\nThat makes HYPE more exciting, but also much more fragile to sentiment air pockets. I can keep this as a living brief if you want unlock dates, competitor fee wars, or a tighter risk memo next.",
         ),
       ]),
     ],
@@ -372,7 +466,6 @@ export const DEMO_CHATS: DemoChat[] = [
   {
     id: "e8c14f57-2a9b-4e60-8d3c-5f1a7b0e9264",
     title: "Technical analysis",
-    playback: true,
     messages: [
       userMsg(
         "t1",
@@ -394,13 +487,38 @@ export const DEMO_CHATS: DemoChat[] = [
             rangePct: 80.9,
             avgVolume20d: "142M",
             lastVolume: "98M",
+            source: "CoinGecko market_chart",
+            candleCount: 91,
           },
           "tc-ohlcv",
           {
             symbol: "HYPE",
             timeframe: "1D",
             lookbackDays: 90,
+            source: "coingecko",
             fields: ["open", "high", "low", "close", "volume"],
+          },
+        ),
+        toolPart(
+          "run_ta_script",
+          {
+            type: "script_run",
+            script: "hype_daily_ta.py",
+            runtime: "python3",
+            inputs: ["91 daily OHLCV candles", "1D timeframe", "HYPE"],
+            computed: [
+              "market structure",
+              "EMA20 / EMA50 trend",
+              "RSI14",
+              "support / resistance ladder",
+              "volume vs 20d average",
+            ],
+            summary:
+              "Code confirmed lower highs, lower lows, price below both moving averages, and weak bounce volume.",
+          },
+          "tc-ta-script",
+          {
+            note: "Execute quant summary code over fetched candle set",
           },
         ),
         toolPart(
@@ -474,7 +592,16 @@ export const DEMO_CHATS: DemoChat[] = [
           },
         ),
         textPart(
-          "**HYPE · daily technical analysis**\n\nPulled **90d OHLCV** ($17.9-$32.4), checked funding/OI context, then scored structure + momentum.\n\n### 1. Market structure\nOff the ~**$32.4** spike, price is printing **lower highs and lower lows**. Swing highs stepped down through ~30.2 → 27.8 → 24.9 → failed holds of the mid-20s. That is an active **downtrend**, not a sideways base yet.\n\n### 2. Trend filter (EMAs)\n**EMA20 (~$23.4)** and **EMA50 (~$25.8)** both slope down; spot (**$20.8**) trades **below both**. Until a daily close reclaims and holds the 20, trend bias stays bearish.\n\n### 3. Support / resistance\n| Zone | Level | Role |\n|---|---|---|\n| R1 | **$24.0** | Last breakdown shelf / short trigger |\n| R2 | **$27.8** | Prior congestion |\n| R3 / invalidate | **$30.2** | Break of bearish structure |\n| S1 | **$20.8** | Current demand test |\n| S2-S3 | **$19.1 → $17.9** | Prior base / 90d low pocket |\n\n### 4. Momentum (RSI 14)\n**RSI ≈ 41** - cooled from the spike, **not washed-out** (<30). Sellers still have room; this is not a forced long on “oversold.” No clear bullish divergence on the latest lower low.\n\n### 5. Volume context\nLast prints run **~31% below** the 20d average on bounce attempts. Weak volume on relief rallies = **low conviction shorts covering / weak bids**, which usually favors continuation lower over a V-reversal.\n\n### 6. Short thesis - still valid?\n**Yes, but don’t chase into S1.** Prefer a **fade into $22.8-24.0** (failed reclaim of the breakdown shelf) rather than market-selling the support tap.\n\n- **Entry:** weak bounce / rejection in **$22.8-24.0**\n- **Stop:** above **$27.8** (tactical) or **$30.2** (structure invalidation)\n- **Targets:** **$19.1**, stretch **$17.9**\n- **Risk:** if funding flips deeply negative and OI expands on a reclaim of $24 with rising volume, stand down - that would be a change of character, not this tape.\n\n**Bottom line:** Bias remains **short-on-weakness**. Structure, EMAs, and volume agree; RSI says the move isn’t exhausted yet. Invalidation is a sustained reclaim through **$30.2**, not a single wick.\n\nWant the same framework on the **4H** for timing, or a second token?",
+          "**HYPE · daily technical analysis**\n\nI fetched **91 daily candles from CoinGecko**, ran a quick quant script over the set, then sanity-checked the read against funding / OI context.\n\n### 1. Market structure\nOff the ~**$32.4** spike, price is still printing **lower highs and lower lows**. The failed reclaim sequence through the mid-20s matters more than any one intraday bounce. Structurally this still looks like an active downtrend, not a base.\n\n### 2. Trend filter (EMAs)\n**EMA20 (~$23.4)** and **EMA50 (~$25.8)** both slope down; spot (**$20.8**) is **below both**. Until daily closes reclaim and hold that moving-average cluster, any bounce has to prove itself.\n\n### 3. Levels that matter\n| Zone | Level | Role |\n|---|---|---|\n| R1 | **$24.0** | Last breakdown shelf / first fade zone |\n| R2 | **$27.8** | Prior congestion / tactical stop zone |\n| R3 | **$30.2** | Real structure invalidation |\n| S1 | **$20.8** | Current demand test |\n| S2-S3 | **$19.1 → $17.9** | Prior base / 90d low pocket |\n\n### 4. Momentum + volume\n**RSI ≈ 41** says the move is softer than the first breakdown wave, but not exhausted. More important: rally attempts are still printing **below the 20d average**. Weak bounce volume usually means the path of least resistance is still lower until proven otherwise.\n\n### 5. Trade framing\nThe short still makes sense, but **not as a panic sell into support**. The better version is letting price bounce into the failed shelf and seeing if sellers reappear.\n\n- **Better trigger:** rejection in **$22.8-24.0**\n- **Tactical stop:** above **$27.8**\n- **True invalidation:** sustained reclaim through **$30.2**\n- **Downside map:** **$19.1** first, then **$17.9** if risk stays off\n\n**Bottom line:** still a **short-on-weakness / fade-strength** chart. Structure, EMA trend, and volume all line up. I would only back off if price reclaims the mid-20s with real participation, not just one squeeze candle.",
+        ),
+      ]),
+      userMsg(
+        "t3",
+        "What would make you stop leaning short here and say the trade is dead?",
+      ),
+      assistantMsg("t4", [
+        textPart(
+          "Three things would make me stop pressing the short:\n\n1. **Daily reclaim of $24-25 with real volume**. I want to see spot back above the breakdown shelf and the bounce participation improve, not just a thin squeeze.\n2. **EMA20 flattening / price accepting above it**. If price starts living back above the 20 and the 50 is no longer capping every rally, the tape is changing.\n3. **Structure invalidation through ~$30.2**. That is the clean line in the sand. Above that, the lower-high sequence is broken and the thesis is no longer the same trade.\n\nSo the tactical answer is \"be careful above $27.8.\" The real answer is \"the bearish idea is wrong above $30.2 with acceptance.\"",
         ),
       ]),
     ],
@@ -529,17 +656,17 @@ export const DEMO_AGENTS: DemoAgent[] = [
     kind: "dca",
     status: "active",
     askedTo:
-      "Every Monday buy $150 of ETH. Keep it automated. Base only. Skip a week if ETH is up more than 12% week-over-week. Later: also skip when gas is stupid.",
+      "Keep buying ETH on a boring weekly schedule, from this agent's own wallet, with clear spend and risk limits.",
     agentWallet: {
-      label: "DCA agent wallet",
+      label: "Agent wallet",
       address: ADDR_DCA_AGENT,
       chainFamily: "evm",
     },
     guardRails: [
-      { label: "Max per buy", value: "$150 USDC" },
-      { label: "Momentum skip", value: "ETH WoW > +12%" },
-      { label: "Gas skip", value: "Base gas too high" },
-      { label: "Cadence", value: "Weekly · Mondays" },
+      { label: "Spend limit", value: "$150 per run" },
+      { label: "Schedule", value: "Weekly · Mondays" },
+      { label: "Risk rule", value: "Skip if asset up >12% WoW" },
+      { label: "Gas policy", value: "Skip when network fees are high" },
     ],
     allowedChains: ["Base"],
     chatId: "1a6d9e82-4f0c-48b5-9c27-3e5d8a1f7049",
@@ -548,35 +675,35 @@ export const DEMO_AGENTS: DemoAgent[] = [
         id: "r1",
         at: "2026-07-20T14:00:12Z",
         status: "done",
-        title: "Bought 0.038 ETH",
-        detail: "From agent wallet · $149.92",
+        title: "Run completed",
+        detail: "Agent wallet spent $149.92 · ETH buy",
       },
       {
         id: "r2",
         at: "2026-07-13T14:00:09Z",
         status: "done",
-        title: "Bought 0.041 ETH",
-        detail: "From agent wallet · $150.00",
+        title: "Run completed",
+        detail: "Agent wallet spent $150.00 · ETH buy",
       },
       {
         id: "r3",
         at: "2026-07-06T14:00:11Z",
         status: "skipped",
-        title: "Skipped - momentum guard rail",
-        detail: "ETH +14.2% WoW",
+        title: "Skipped by risk rule",
+        detail: "Asset was up 14.2% week over week",
       },
       {
         id: "r4",
         at: "2026-06-29T14:00:08Z",
         status: "done",
-        title: "Bought 0.036 ETH",
-        detail: "From agent wallet · $149.88",
+        title: "Run completed",
+        detail: "Agent wallet spent $149.88 · ETH buy",
       },
       {
         id: "r5",
         at: "2026-07-27T14:00:00Z",
         status: "scheduled",
-        title: "Next buy queued",
+        title: "Next run queued",
         detail: "Monday · agent wallet funded",
       },
     ],
