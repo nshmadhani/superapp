@@ -99,19 +99,19 @@ export function useDemoPlayback(chat: DemoChat | undefined) {
                 })),
               );
               const ch = fullText[i]!;
-              await sleep(ch === " " ? 10 : ch === "," || ch === "." ? 40 : 16, signal);
+              await sleep(ch === " " ? 40 : ch === "," || ch === "." ? 120 : 55, signal);
             }
-            await sleep(550, signal);
+            await sleep(900, signal);
             continue;
           }
 
           // Assistant: empty shell → tools → text
-          await sleep(280, signal);
+          await sleep(700, signal);
           setMessages((prev) => [
             ...prev,
             { id: full.id, role: "assistant", parts: [] },
           ]);
-          await sleep(700, signal);
+          await sleep(1200, signal);
 
           const toolParts = (full.parts ?? []).filter(isToolPart);
           const answer = textOf(full.parts);
@@ -131,7 +131,7 @@ export function useDemoPlayback(chat: DemoChat | undefined) {
                 parts: [...m.parts, runningPart],
               })),
             );
-            await sleep(1100, signal);
+            await sleep(2200, signal);
 
             setMessages((prev) =>
               patchMessage(prev, full.id, (m) => ({
@@ -151,7 +151,7 @@ export function useDemoPlayback(chat: DemoChat | undefined) {
                 }),
               })),
             );
-            await sleep(480, signal);
+            await sleep(1100, signal);
           }
 
           if (answer) {
@@ -162,7 +162,7 @@ export function useDemoPlayback(chat: DemoChat | undefined) {
               })),
             );
 
-            const step = 4;
+            const step = 2;
             for (let i = 0; i < answer.length; i += step) {
               const slice = answer.slice(0, Math.min(i + step, answer.length));
               setMessages((prev) =>
@@ -177,11 +177,11 @@ export function useDemoPlayback(chat: DemoChat | undefined) {
                   return { ...m, parts };
                 }),
               );
-              await sleep(14, signal);
+              await sleep(22, signal);
             }
           }
 
-          await sleep(200, signal);
+          await sleep(500, signal);
         }
 
         setBusy(false);

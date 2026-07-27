@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 export type OhlcBar = {
-  time: number; // unix seconds
+  time: number; // unix seconds (UTC day)
   open: number;
   high: number;
   low: number;
@@ -9,9 +9,57 @@ export type OhlcBar = {
   volume?: number;
 };
 
+type ChartPayload = {
+  prices: [number, number][];
+  total_volumes: [number, number][];
+};
+
+/** Bucket CoinGecko market_chart points into real daily OHLC. */
+function toDailyOhlc(chart: ChartPayload): OhlcBar[] {
+  const byDay = new Map<
+    number,
+    { open: number; high: number; low: number; close: number; volume: number }
+  >();
+
+  for (const [ms, price] of chart.prices ?? []) {
+    const day = Math.floor(ms / 86_400_000) * 86_400;
+    const row = byDay.get(day);
+    if (!row) {
+      byDay.set(day, {
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+        volume: 0,
+      });
+    } else {
+      row.high = Math.max(row.high, price);
+      row.low = Math.min(row.low, price);
+      row.close = price;
+    }
+  }
+
+  for (const [ms, vol] of chart.total_volumes ?? []) {
+    const day = Math.floor(ms / 86_400_000) * 86_400;
+    const row = byDay.get(day);
+    if (row) row.volume += vol;
+  }
+
+  return [...byDay.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([day, row]) => ({
+      time: day,
+      open: row.open,
+      high: row.high,
+      low: row.low,
+      close: row.close,
+      volume: row.volume,
+    }));
+}
+
 /**
- * Public market OHLC via CoinGecko (no API key for demo rates).
- * Used by the seeded TA chat for real candles.
+ * Live HYPE (or other) daily candles from CoinGecko market_chart.
+ * No API key. Aggregated to 1D OHLC so the desk chart has real density.
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -21,7 +69,7 @@ export async function GET(req: Request) {
 
   try {
     const cg = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coin)}/ohlc?vs_currency=${encodeURIComponent(vs)}&days=${encodeURIComponent(days)}`,
+      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coin)}/market_chart?vs_currency=${encodeURIComponent(vs)}&days=${encodeURIComponent(days)}`,
       {
         headers: { accept: "application/json" },
         next: { revalidate: 300 },
@@ -36,35 +84,26 @@ export async function GET(req: Request) {
       );
     }
 
-    const raw = (await cg.json()) as number[][];
-    const candles: OhlcBar[] = raw.map((row) => ({
-      time: Math.floor(row[0]! / 1000),
-      open: row[1]!,
-      high: row[2]!,
-      low: row[3]!,
-      close: row[4]!,
-    }));
+    const chart = (await cg.json()) as ChartPayload;
+    const candles = toDailyOhlc(chart);
 
-    // CoinGecko OHLC has no volume — approximate relative volume from range
-    // for chart pane context only (labeled as derived in UI).
-    const withVol = candles.map((c, i) => {
-      const range = Math.max(c.high - c.low, 1e-9);
-      const body = Math.abs(c.close - c.open);
-      const prev = candles[i - 1];
-      const gap = prev ? Math.abs(c.open - prev.close) : 0;
-      return {
-        ...c,
-        volume: range * 1e6 + body * 5e5 + gap * 2e5,
-      };
-    });
+    if (!candles.length) {
+      return NextResponse.json(
+        { error: "No candles built from market_chart" },
+        { status: 502 },
+      );
+    }
 
     return NextResponse.json({
-      source: "coingecko",
+      source: "coingecko_market_chart",
       coin,
       vs,
       days: Number(days),
-      candles: withVol,
+      interval: "1d",
+      candleCount: candles.length,
+      candles,
       asOf: new Date().toISOString(),
+      note: "Daily OHLC built from live CoinGecko market_chart prices and volumes",
     });
   } catch (err) {
     return NextResponse.json(

@@ -28,11 +28,13 @@ function emaSeries(closes: number[], period: number) {
 export function ProTaChart({
   candles,
   analysis,
-  height = 420,
+  height = 440,
+  meta,
 }: {
   candles: OhlcBar[];
   analysis?: TaAnalysis | null;
   height?: number;
+  meta?: { source?: string; asOf?: string; candleCount?: number };
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -168,22 +170,29 @@ export function ProTaChart({
       chart.remove();
       chartRef.current = null;
     };
-  }, [candles, analysis, height]);
+  }, [candles, analysis, height, meta?.asOf, meta?.candleCount]);
 
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
         <div>
           <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-            Working chart · real OHLC
+            Working chart (real data)
           </p>
           <p className="text-xs text-zinc-400">
-            Candles · EMA20/50 · volume · S/R & invalidation lines
+            Daily candles, EMA20/50, volume, support and resistance lines
           </p>
         </div>
-        <p className="text-[10px] uppercase tracking-wide text-zinc-600">
-          CoinGecko feed
-        </p>
+        <div className="text-right text-[10px] uppercase tracking-wide text-zinc-600">
+          <p>
+            {meta?.candleCount ?? candles.length} days · CoinGecko live
+          </p>
+          {meta?.asOf && (
+            <p className="normal-case tracking-normal text-zinc-700">
+              as of {new Date(meta.asOf).toLocaleString()}
+            </p>
+          )}
+        </div>
       </div>
       <div ref={wrapRef} className="w-full" style={{ height }} />
       {analysis && (
@@ -207,7 +216,7 @@ export function ProTaChart({
                 {z.label}
               </span>
               <span className="ml-2 font-mono text-zinc-400">
-                ${z.from.toFixed(2)} – ${z.to.toFixed(2)}
+                ${z.from.toFixed(2)} - ${z.to.toFixed(2)}
               </span>
               <span className="ml-2 text-zinc-600">{z.kind}</span>
             </div>

@@ -107,7 +107,7 @@ export function AgentPanel({ agentId }: { agentId: string }) {
                 {agent.agentWallet.chainFamily === "solana" ? "Solana" : "EVM"}
               </p>
               <p className="mt-1 text-xs text-zinc-600">
-                Dedicated wallet for this agent — buys run from here.
+                Dedicated wallet for this agent. Buys run from here.
               </p>
             </div>
           </div>

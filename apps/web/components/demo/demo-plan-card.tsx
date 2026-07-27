@@ -26,7 +26,7 @@ const CHAIN: Record<number, string> = {
 
 export function DemoPlanCard({ review }: { review: DemoPlan }) {
   const q = review.quote ?? {};
-  const from = q.chainId != null ? CHAIN[q.chainId] ?? String(q.chainId) : "—";
+  const from = q.chainId != null ? CHAIN[q.chainId] ?? String(q.chainId) : " - ";
   const to =
     q.toChainId != null ? CHAIN[q.toChainId] ?? String(q.toChainId) : from;
   const cross = q.isCrossChain ?? q.chainId !== q.toChainId;
@@ -52,7 +52,7 @@ export function DemoPlanCard({ review }: { review: DemoPlan }) {
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
         <div>
           <dt className="text-zinc-600">Route</dt>
-          <dd className="text-zinc-300">{q.displayRoute ?? "—"}</dd>
+          <dd className="text-zinc-300">{q.displayRoute ?? " - "}</dd>
         </div>
         <div>
           <dt className="text-zinc-600">Tool</dt>

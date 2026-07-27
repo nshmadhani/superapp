@@ -13,7 +13,7 @@ export default function HomePage() {
             Cipher
           </h1>
           <p className="mt-2 max-w-md text-sm text-zinc-500">
-            Research, move money, and run agents across your wallets — all in one
+            Research, move money, and run agents across your wallets. All in one
             place.
           </p>
         </div>

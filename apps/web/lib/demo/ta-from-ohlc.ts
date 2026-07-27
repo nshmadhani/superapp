@@ -45,6 +45,7 @@ export type TaAnalysis = {
     rr: string;
   };
   plainEnglish: string;
+  dataNote: string;
 };
 
 function ema(values: number[], period: number): number[] {
@@ -157,15 +158,18 @@ export function analyzeOhlc(
     .slice(0, 3)
     .reverse();
 
-  // Ensure we always have useful levels near price
   const resistance =
     resAll.length > 0
       ? resAll
-      : [last * 1.05, last * 1.12, high90].filter((v, i, a) => a.indexOf(v) === i);
+      : [last * 1.05, last * 1.12, high90].filter(
+          (v, i, a) => a.indexOf(v) === i,
+        );
   const support =
     supAll.length > 0
       ? supAll
-      : [last * 0.95, last * 0.88, low90].filter((v, i, a) => a.indexOf(v) === i);
+      : [last * 0.95, last * 0.88, low90].filter(
+          (v, i, a) => a.indexOf(v) === i,
+        );
 
   const belowBoth = last < ema20 && last < ema50;
   const aboveBoth = last > ema20 && last > ema50;
@@ -178,25 +182,26 @@ export function analyzeOhlc(
     lows[lows.length - 1]! > lows[lows.length - 2]! &&
     lows[lows.length - 2]! > lows[lows.length - 3]!;
 
-  let structure = "Range / chop";
-  let bias = "Neutral — wait";
+  let structure = "Mostly rangebound";
+  let bias = "Wait for a clear break";
   if (belowBoth && lowerHighs) {
-    structure = "Lower highs · price below EMAs (downtrend)";
-    bias = "Short on weakness";
+    structure = "Lower highs, price under the averages";
+    bias = "Lean short on strength";
   } else if (aboveBoth && higherLows) {
-    structure = "Higher lows · price above EMAs (uptrend)";
-    bias = "Long on strength";
+    structure = "Higher lows, price above the averages";
+    bias = "Lean long on dips";
   } else if (belowBoth) {
-    structure = "Below key EMAs — bearish bias";
-    bias = "Short / cautious";
+    structure = "Price under the key averages";
+    bias = "Cautious short bias";
   } else if (aboveBoth) {
-    structure = "Above key EMAs — bullish bias";
-    bias = "Long / cautious";
+    structure = "Price above the key averages";
+    bias = "Cautious long bias";
   }
 
   const vols = bars.map((b) => b.volume ?? 0);
   const avg20 =
-    vols.slice(-20).reduce((a, b) => a + b, 0) / Math.max(Math.min(20, vols.length), 1);
+    vols.slice(-20).reduce((a, b) => a + b, 0) /
+    Math.max(Math.min(20, vols.length), 1);
   const lastVol = vols[vols.length - 1] ?? 0;
   const volDelta = avg20 ? ((lastVol - avg20) / avg20) * 100 : 0;
 
@@ -204,8 +209,11 @@ export function analyzeOhlc(
   const r2 = resistance[1] ?? last * 1.12;
   const s1 = support[0] ?? last * 0.95;
   const s2 = support[1] ?? last * 0.88;
-  const invalidation =
-    bias.startsWith("Short") ? Math.max(...resistance.slice(-1), ema50) : Math.min(...support.slice(-1), ema50);
+  const invalidation = bias.includes("short")
+    ? Math.max(...resistance.slice(-1), ema50)
+    : bias.includes("long")
+      ? Math.min(...support.slice(-1), ema50)
+      : ema50;
 
   const zones: TaAnalysis["zones"] = [
     {
@@ -237,12 +245,11 @@ export function analyzeOhlc(
   const fmt = (n: number) =>
     n >= 100 ? n.toFixed(1) : n >= 10 ? n.toFixed(2) : n.toFixed(3);
 
-  const plainEnglish =
-    bias.startsWith("Short")
-      ? `Price is grinding under the trend averages. Prefer fading strength into ~$${fmt(r1)} rather than chasing the lows. Invalidation is a sustained reclaim through ~$${fmt(invalidation)}.`
-      : bias.startsWith("Long")
-        ? `Price holds above the trend averages. Prefer buying strength / dips that hold ~$${fmt(s1)}. Invalidation is a break and hold under ~$${fmt(invalidation)}.`
-        : `No clean trend edge. Wait for a break and hold of ~$${fmt(r1)} or ~$${fmt(s1)} before sizing.`;
+  const plainEnglish = bias.includes("short")
+    ? `Sellers still have control. I would rather sell a bounce near $${fmt(r1)} than chase the lows. If price closes and holds above $${fmt(invalidation)}, that read is wrong.`
+    : bias.includes("long")
+      ? `Buyers still have control. I would rather buy strength that holds near $${fmt(s1)}. If price closes and holds under $${fmt(invalidation)}, that read is wrong.`
+      : `No clean edge yet. Wait for a daily hold above $${fmt(r1)} or under $${fmt(s1)} before sizing.`;
 
   return {
     type: "ta_snapshot",
@@ -269,74 +276,50 @@ export function analyzeOhlc(
     volume: {
       note:
         volDelta < -15
-          ? "Recent bars quieter than average — weak participation on moves"
+          ? "Latest days are quieter than usual"
           : volDelta > 20
-            ? "Recent bars louder than average — conviction in the last move"
-            : "Volume near average — no strong participation edge",
+            ? "Latest days are louder than usual"
+            : "Volume is roughly average",
       vs20dAvg: `${volDelta >= 0 ? "+" : ""}${volDelta.toFixed(0)}%`,
     },
     risk: {
-      entryZone: bias.startsWith("Short")
-        ? `fade $${fmt(last)}–$${fmt(r1)}`
-        : bias.startsWith("Long")
-          ? `hold/dip $${fmt(s1)}–$${fmt(last)}`
-          : "wait for break",
+      entryZone: bias.includes("short")
+        ? `near $${fmt(r1)}`
+        : bias.includes("long")
+          ? `near $${fmt(s1)}`
+          : "after a break",
       stop: `beyond $${fmt(invalidation)}`,
-      targets: bias.startsWith("Short")
-        ? `$${fmt(s1)} then $${fmt(s2)}`
-        : `$${fmt(r1)} then $${fmt(r2)}`,
-      rr: "~1.5–2.5R depending on entry",
+      targets: bias.includes("short")
+        ? `$${fmt(s1)}, then $${fmt(s2)}`
+        : `$${fmt(r1)}, then $${fmt(r2)}`,
+      rr: "about 1.5 to 2.5R",
     },
     plainEnglish,
+    dataNote: `${bars.length} daily candles from live CoinGecko prices`,
   };
 }
 
+/** Short, plain explanation after the complex chart. No em dashes. */
 export function buildTaWriteup(a: TaAnalysis): string {
   const f = (n: number) =>
     n >= 100 ? n.toFixed(1) : n >= 10 ? n.toFixed(2) : n.toFixed(3);
 
-  return `**${a.symbol} · daily technical analysis** *(live CoinGecko OHLC)*
+  return `Okay, simple version.
 
-The chart above is the **working tape** — candles, EMAs, volume, and boxed levels traders actually mark. Below is the **plain read** for decision-making.
+We pulled **live HYPE prices from CoinGecko** and built **${a.dataNote}**. The chart above is the desk view: candles, EMA20/EMA50, volume, and the levels we marked.
 
-### What’s on the chart
-- **Candles:** last ~90d real OHLC from CoinGecko  
-- **EMA20 / EMA50:** trend filter overlays  
-- **Boxes:** support / resistance / invalidation zones derived from swing pivots  
-- **Volume pane:** relative activity (derived when the feed lacks raw volume)
+**What it says**
+${a.structure}. Last price is **$${f(a.last)}**. Over this window it went from about **$${f(a.low90)}** to **$${f(a.high90)}** (${a.changePct90 >= 0 ? "+" : ""}${a.changePct90.toFixed(1)}%).
 
-### Structure
-${a.structure}
-
-**Last** $${f(a.last)} · **90d range** $${f(a.low90)}–$${f(a.high90)} (${a.changePct90 >= 0 ? "+" : ""}${a.changePct90.toFixed(1)}%)
-
-### Indicators
-| | |
-|---|---|
-| RSI(14) | **${a.indicators.rsi14}** |
-| EMA20 | **$${f(a.indicators.ema20)}** |
-| EMA50 | **$${f(a.indicators.ema50)}** |
-| ATR(14) | **$${f(a.indicators.atr14)}** |
-
-### Levels
-| | |
-|---|---|
-| Resistance | ${a.levels.resistance.map((l) => `$${f(l)}`).join(" · ")} |
-| Support | ${a.levels.support.map((l) => `$${f(l)}`).join(" · ")} |
-| Invalidation | **$${f(a.levels.invalidation)}** |
-
-### Volume
-${a.volume.note} (${a.volume.vs20dAvg} vs ~20-bar avg)
-
-### Inference
-**Bias: ${a.bias}**
+**Bias:** ${a.bias}
 
 ${a.plainEnglish}
 
-- **Plan:** ${a.risk.entryZone}  
-- **Stop:** ${a.risk.stop}  
-- **Targets:** ${a.risk.targets}  
-- **RR:** ${a.risk.rr}
+**If you act on it**
+- Watch / enter: ${a.risk.entryZone}
+- Stop: ${a.risk.stop}
+- Targets: ${a.risk.targets}
+- RSI is ${a.indicators.rsi14}. EMA20 is $${f(a.indicators.ema20)}. EMA50 is $${f(a.indicators.ema50)}.
 
-This is a **framework from live data**, not a prediction guarantee — invalidate when structure says so.`;
+Not a guarantee. The chart is the evidence. This paragraph is just the read.`;
 }

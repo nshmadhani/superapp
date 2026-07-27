@@ -60,12 +60,12 @@ function toolPart(
 
 const SEARCH_HITS = [
   {
-    title: "CoinGecko — Hyperliquid (HYPE)",
+    title: "CoinGecko: Hyperliquid (HYPE)",
     url: "https://www.coingecko.com/en/coins/hyperliquid",
     content: "Live market reference used for OHLC in this session.",
   },
   {
-    title: "TradingView — HYPEUSD",
+    title: "TradingView HYPEUSD",
     url: "https://www.tradingview.com/symbols/HYPEUSD/",
     content: "How desks mark daily structure on the same tape.",
   },
@@ -77,12 +77,14 @@ function MessageView({
   busy,
   candles,
   analysis,
+  feedMeta,
 }: {
   message: UIMessage;
   isLast?: boolean;
   busy?: boolean;
   candles: OhlcBar[];
   analysis: TaAnalysis | null;
+  feedMeta?: { source?: string; asOf?: string; candleCount?: number };
 }) {
   const steps = extractAgentSteps(message.parts);
   const citations = extractCitations(message.parts);
@@ -125,13 +127,17 @@ function MessageView({
         />
       )}
       {priceOut && candles.length > 0 && (
-        <ProTaChart candles={candles} analysis={analysis} />
+        <ProTaChart
+          candles={candles}
+          analysis={analysis}
+          meta={feedMeta}
+        />
       )}
       <CitationsCard hits={citations} />
       {taOut && (
         <div className="space-y-2">
           <p className="px-1 text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-            Simplified read for the user
+            Simple read
           </p>
           <DemoTaCard snap={taOut} />
         </div>
@@ -153,6 +159,11 @@ export function TaLiveSession() {
   const [busy, setBusy] = useState(true);
   const [candles, setCandles] = useState<OhlcBar[]>([]);
   const [analysis, setAnalysis] = useState<TaAnalysis | null>(null);
+  const [feedMeta, setFeedMeta] = useState<{
+    source?: string;
+    asOf?: string;
+    candleCount?: number;
+  }>({});
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -171,7 +182,7 @@ export function TaLiveSession() {
       setError(null);
       try {
         const prompt =
-          "Run a proper TA pass on HYPE — pull real daily OHLC, mark the chart like a desk would, then give me the simple read: bias, levels, and whether a short still makes sense.";
+          "Can you run a proper TA on HYPE for me? Pull the real daily candles, mark the chart the way a desk would, then explain the simple read. Bias, levels, and if a short still makes sense.";
 
         setMessages([
           { id: "t1", role: "user", parts: [{ type: "text", text: "" }] },
@@ -181,14 +192,22 @@ export function TaLiveSession() {
           setMessages([
             { id: "t1", role: "user", parts: [{ type: "text", text: slice }] },
           ]);
-          await sleep(i % 3 === 0 ? 12 : 8, signal);
+          const ch = prompt[i]!;
+          const delay =
+            ch === " "
+              ? 55
+              : ch === "," || ch === "?" || ch === "."
+                ? 180
+                : 70 + (i % 5) * 8;
+          await sleep(delay, signal);
         }
-        await sleep(500, signal);
+        await sleep(1400, signal);
 
         setMessages((prev) => [
           ...prev,
           { id: "t2", role: "assistant", parts: [] },
         ]);
+        await sleep(900, signal);
 
         // Tool 1: fetch real OHLC
         setMessages((prev) =>
@@ -216,6 +235,11 @@ export function TaLiveSession() {
         const bars = (data.candles ?? []) as OhlcBar[];
         if (!bars.length) throw new Error("No candles returned");
         setCandles(bars);
+        setFeedMeta({
+          source: data.source,
+          asOf: data.asOf,
+          candleCount: bars.length,
+        });
 
         const closes = bars.map((b) => b.close);
         const last = closes[closes.length - 1]!;
@@ -227,15 +251,17 @@ export function TaLiveSession() {
           symbol: "HYPE",
           timeframe: "1D",
           lookbackDays: 90,
-          source: "coingecko",
+          source: data.source ?? "coingecko_market_chart",
+          candleCount: bars.length,
           series: closes,
           last,
           changePct: ((last - first) / first) * 100,
           high90,
           low90,
+          asOf: data.asOf,
         };
 
-        await sleep(400, signal);
+        await sleep(2200, signal);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === "t2"
@@ -254,7 +280,7 @@ export function TaLiveSession() {
               : m,
           ),
         );
-        await sleep(700, signal);
+        await sleep(2800, signal);
 
         // Tool 2: search
         setMessages((prev) =>
@@ -276,7 +302,7 @@ export function TaLiveSession() {
               : m,
           ),
         );
-        await sleep(900, signal);
+        await sleep(2400, signal);
         setMessages((prev) =>
           prev.map((m) =>
             m.id === "t2"
@@ -297,7 +323,7 @@ export function TaLiveSession() {
               : m,
           ),
         );
-        await sleep(500, signal);
+        await sleep(1600, signal);
 
         // Tool 3: analyze from real bars
         setMessages((prev) =>
@@ -330,7 +356,7 @@ export function TaLiveSession() {
 
         const snap = analyzeOhlc(bars, { symbol: "HYPE", timeframe: "1D" });
         setAnalysis(snap);
-        await sleep(1000, signal);
+        await sleep(3200, signal);
 
         setMessages((prev) =>
           prev.map((m) =>
@@ -364,7 +390,8 @@ export function TaLiveSession() {
               : m,
           ),
         );
-        const step = 5;
+        await sleep(800, signal);
+        const step = 2;
         for (let i = 0; i < writeup.length; i += step) {
           const slice = writeup.slice(0, Math.min(i + step, writeup.length));
           setMessages((prev) =>
@@ -380,7 +407,7 @@ export function TaLiveSession() {
               return { ...m, parts };
             }),
           );
-          await sleep(10, signal);
+          await sleep(28, signal);
         }
 
         setBusy(false);
@@ -405,7 +432,7 @@ export function TaLiveSession() {
           Technical analysis
         </h1>
         <p className="mt-0.5 text-[11px] text-zinc-600">
-          Live CoinGecko OHLC · desk chart → simplified inference
+          Live CoinGecko daily candles. Desk chart first, then a plain read.
         </p>
       </div>
       <div className="cipher-scroll flex-1 overflow-y-auto pb-36">
@@ -423,6 +450,7 @@ export function TaLiveSession() {
               busy={busy && m.id === messages[messages.length - 1]?.id}
               candles={candles}
               analysis={analysis}
+              feedMeta={feedMeta}
             />
           ))}
           {messages.length === 0 && busy && (
