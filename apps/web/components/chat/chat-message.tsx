@@ -9,6 +9,7 @@ import {
   CitationsCard,
   ClarificationCard,
   PortfolioCard,
+  SpawnAgentCard,
   TransferSubmittedCard,
 } from "./cards";
 import { MessageActions } from "./message-actions";
@@ -18,6 +19,7 @@ import {
   extractClarifications,
   extractPlanReviews,
   extractPortfolios,
+  extractSpawnedAgents,
   textFromParts,
 } from "./tool-extractors";
 import { parseTransferSubmitted } from "@/lib/transfer-submitted";
@@ -29,6 +31,7 @@ export function ChatMessage({
   onRegenerate,
   onClarify,
   onTxOutcome,
+  submittedPlanIds,
 }: {
   message: UIMessage;
   isLastAssistant?: boolean;
@@ -36,12 +39,14 @@ export function ChatMessage({
   onRegenerate?: () => void;
   onClarify?: (text: string) => void;
   onTxOutcome?: (outcome: TxReviewOutcome) => void;
+  submittedPlanIds?: Set<string>;
 }) {
   const steps = extractAgentSteps(message.parts);
   const reviews = extractPlanReviews(message.parts);
   const citations = extractCitations(message.parts);
   const portfolios = extractPortfolios(message.parts);
   const clarifications = extractClarifications(message.parts);
+  const spawned = extractSpawnedAgents(message.parts);
   const text = textFromParts(message.parts);
   const transferSubmitted = parseTransferSubmitted(text);
   const showAgent =
@@ -104,8 +109,12 @@ export function ChatMessage({
         <TxReviewCard
           key={`${message.id}-plan-${idx}`}
           review={r}
+          alreadySubmitted={submittedPlanIds?.has(r.planId)}
           onOutcome={(outcome) => onTxOutcome?.(outcome)}
         />
+      ))}
+      {spawned.map((s) => (
+        <SpawnAgentCard key={s.runId} run={s} />
       ))}
 
       {(text || onRegenerate) && (

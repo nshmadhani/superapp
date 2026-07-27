@@ -71,10 +71,10 @@ const turnkeyConfig: TurnkeyProviderConfig = {
           walletConnect: {
             projectId: walletConnectProjectId,
             appMetadata: {
-              name: "Cipher",
+              name: "Ervo",
               description: "AI crypto co-pilot",
               url: appUrl,
-              icons: [`${appUrl}/favicon.ico`],
+              icons: [`${appUrl}/icon.png`],
             },
           },
         }
@@ -103,6 +103,20 @@ function logTurnkeyError(error: unknown) {
   console.error("Turnkey error:", err?.message ?? error);
   if (err?.cause) console.error("Turnkey error cause:", err.cause);
   if (err?.code != null) console.error("Turnkey error code:", err.code);
+  // Surface nested Turnkey request ids from 5xx responses for support.
+  const causeMsg =
+    err?.cause instanceof Error
+      ? err.cause.message
+      : typeof err?.cause === "string"
+        ? err.cause
+        : err?.cause &&
+            typeof err.cause === "object" &&
+            "message" in err.cause
+          ? String((err.cause as { message?: unknown }).message)
+          : undefined;
+  if (causeMsg && /\([0-9a-f-]{36}\)/i.test(causeMsg)) {
+    console.error("Turnkey request id:", causeMsg.match(/\(([0-9a-f-]{36})\)/i)?.[1]);
+  }
 }
 
 export function Providers({ children }: { children: ReactNode }) {

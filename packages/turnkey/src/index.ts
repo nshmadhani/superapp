@@ -4,4 +4,5 @@ export {
   createCipherWallet,
   type CreatedEvmWallet,
   type CreatedCipherWallet,
+  type CreateCipherWalletOpts,
 } from "./wallets";

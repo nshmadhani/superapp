@@ -1,9 +1,12 @@
 "use client";
 
+import { ErvoLogo } from "@/components/ervo-logo";
+
 const SUGGESTIONS = [
-  "Review my portfolio",
-  "What are the best ETH yields right now?",
-  "Help me plan a swap",
+  "Bridge 0.4 ETH to Base then lend on Morpho",
+  "Create an agent to monitor Morpho USDC APY for 6 hours",
+  "Create a funded DCA agent — $50 ETH weekly",
+  "Technical analysis on ETH — long or short?",
 ];
 
 export function ChatEmptyState({
@@ -19,12 +22,13 @@ export function ChatEmptyState({
         denser ? "h-[40vh]" : "h-[50vh]"
       }`}
     >
+      <ErvoLogo size="xl" className="size-16 object-contain" priority />
       <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">
-        Cipher
+        Ervo
       </h1>
       <p className="max-w-sm text-sm text-zinc-500">
-        Ask about portfolios, research markets, or plan a trade. Watch the agent
-        run tools as it works.
+        Research, move money, and run agents across your wallets. All in one
+        place.
       </p>
       {onSuggest && (
         <div className="mt-2 flex max-w-md flex-wrap justify-center gap-2">

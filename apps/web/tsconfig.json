@@ -19,7 +19,10 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@cipher/agent-jobs": ["../../packages/agent-jobs/src/index.ts"],
+      "@cipher/agent-jobs/types": ["../../packages/agent-jobs/src/types.ts"],
+      "@cipher/agent-jobs/labels": ["../../packages/agent-jobs/src/labels.ts"]
     }
   },
   "include": [

@@ -2,17 +2,20 @@
 
 import { isLifiEvmChain, isLifiSolanaChain } from "@cipher/core";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
-
-export type TurnkeyEvmSend = (params: {
-  transaction: Record<string, unknown>;
-}) => Promise<unknown>;
+import {
+  getAddress,
+  serializeTransaction,
+  type Hex,
+  type TransactionSerializableEIP1559,
+  type TransactionSerializableLegacy,
+} from "viem";
 
 export type TurnkeyWalletAccount = {
   address: string;
   addressFormat?: string;
 };
 
-/** Turnkey sign only — we broadcast ourselves (base64 raw tx). */
+/** Turnkey sign only — we broadcast ourselves. */
 export type TurnkeySignTransaction = (params: {
   walletAccount: TurnkeyWalletAccount;
   unsignedTransaction: string;
@@ -24,6 +27,10 @@ type TxFields = {
   data?: string;
   value?: string;
   chainId?: number;
+  gasLimit?: string | number;
+  gasPrice?: string | number;
+  maxFeePerGas?: string | number;
+  maxPriorityFeePerGas?: string | number;
 };
 
 function nonEmpty(v: unknown): string | undefined {
@@ -62,8 +69,217 @@ function hexToBytes(hex: string): Uint8Array {
   return out;
 }
 
+function toBigInt(v: string | number | undefined): bigint | undefined {
+  if (v == null || v === "") return undefined;
+  try {
+    return BigInt(v);
+  } catch {
+    return undefined;
+  }
+}
+
+function toHexQuantity(n: bigint): Hex {
+  return `0x${n.toString(16)}` as Hex;
+}
+
+async function evmRpc(
+  chainId: number,
+  method: string,
+  params: unknown[],
+): Promise<unknown> {
+  const res = await fetch("/api/evm/rpc", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chainId, method, params }),
+  });
+  const body = (await res.json()) as { result?: unknown; error?: string };
+  if (!res.ok || body.error) {
+    throw new Error(
+      typeof body.error === "string" ? body.error : `EVM RPC ${method} failed`,
+    );
+  }
+  return body.result;
+}
+
 /**
- * Refresh blockhash, Turnkey-sign, then broadcast via JSON-RPC base64.
+ * Build unsigned EVM tx → Turnkey signTransaction → eth_sendRawTransaction
+ * via our QuickNode proxy. Does NOT use Turnkey ethSendTransaction
+ * (org feature often disabled → ETH_SEND_TRANSACTION_ERROR).
+ */
+export async function signAndBroadcastEvm(opts: {
+  from: string;
+  to: string;
+  data: string;
+  value: string;
+  chainId: number;
+  gasLimit?: string | number;
+  gasPrice?: string | number;
+  maxFeePerGas?: string | number;
+  maxPriorityFeePerGas?: string | number;
+  walletAccount: TurnkeyWalletAccount;
+  signTransaction: TurnkeySignTransaction;
+}): Promise<string> {
+  const nonceHex = (await evmRpc(opts.chainId, "eth_getTransactionCount", [
+    opts.from,
+    "pending",
+  ])) as string;
+  const nonce = Number(nonceHex);
+  if (!Number.isFinite(nonce)) {
+    throw new Error(`Invalid nonce from RPC: ${nonceHex}`);
+  }
+
+  const value = toBigInt(opts.value) ?? BigInt(0);
+  const data = (
+    opts.data.startsWith("0x") ? opts.data : `0x${opts.data}`
+  ) as Hex;
+  const to = opts.to as `0x${string}`;
+
+  let gas = toBigInt(opts.gasLimit);
+  if (gas == null) {
+    const estimated = (await evmRpc(opts.chainId, "eth_estimateGas", [
+      {
+        from: opts.from,
+        to,
+        data,
+        value: toHexQuantity(value),
+      },
+    ])) as string;
+    gas = (BigInt(estimated) * BigInt(120)) / BigInt(100);
+  }
+
+  const providedMaxFee = toBigInt(opts.maxFeePerGas);
+  const providedPriority = toBigInt(opts.maxPriorityFeePerGas);
+  const providedGasPrice = toBigInt(opts.gasPrice);
+
+  let unsignedHex: string;
+
+  if (providedMaxFee != null || providedPriority != null || providedGasPrice == null) {
+    let maxPriorityFeePerGas = providedPriority;
+    let maxFeePerGas = providedMaxFee;
+
+    if (maxPriorityFeePerGas == null || maxFeePerGas == null) {
+      try {
+        const tipHex = (await evmRpc(
+          opts.chainId,
+          "eth_maxPriorityFeePerGas",
+          [],
+        )) as string;
+        maxPriorityFeePerGas = maxPriorityFeePerGas ?? BigInt(tipHex);
+        const block = (await evmRpc(opts.chainId, "eth_getBlockByNumber", [
+          "latest",
+          false,
+        ])) as { baseFeePerGas?: string } | null;
+        const base = BigInt(block?.baseFeePerGas ?? "0x0");
+        maxFeePerGas =
+          maxFeePerGas ??
+          base * BigInt(2) + (maxPriorityFeePerGas ?? BigInt(0));
+      } catch {
+        const gp = BigInt(
+          (await evmRpc(opts.chainId, "eth_gasPrice", [])) as string,
+        );
+        maxPriorityFeePerGas =
+          maxPriorityFeePerGas ?? gp / BigInt(10);
+        maxFeePerGas = maxFeePerGas ?? gp * BigInt(2);
+      }
+    }
+
+    const tx: TransactionSerializableEIP1559 = {
+      type: "eip1559",
+      chainId: opts.chainId,
+      nonce,
+      to,
+      value,
+      data,
+      gas,
+      maxFeePerGas: maxFeePerGas!,
+      maxPriorityFeePerGas: maxPriorityFeePerGas!,
+    };
+    unsignedHex = serializeTransaction(tx);
+  } else {
+    const tx: TransactionSerializableLegacy = {
+      type: "legacy",
+      chainId: opts.chainId,
+      nonce,
+      to,
+      value,
+      data,
+      gas,
+      gasPrice: providedGasPrice,
+    };
+    unsignedHex = serializeTransaction(tx);
+  }
+
+  // Turnkey expects hex without 0x for embedded wallets
+  const unsignedForTurnkey = unsignedHex.startsWith("0x")
+    ? unsignedHex.slice(2)
+    : unsignedHex;
+
+  let signed: string;
+  try {
+    signed = await opts.signTransaction({
+      walletAccount: opts.walletAccount,
+      unsignedTransaction: unsignedForTurnkey,
+      transactionType: "TRANSACTION_TYPE_ETHEREUM",
+    });
+  } catch (err) {
+    const top = err instanceof Error ? err.message : String(err);
+    const cause =
+      err instanceof Error && err.cause instanceof Error
+        ? err.cause.message
+        : err instanceof Error && typeof err.cause === "string"
+          ? err.cause
+          : undefined;
+    const detail = cause && cause !== top ? `${top} — ${cause}` : top;
+    throw new Error(
+      `Turnkey sign failed on chain ${opts.chainId} → ${opts.to}: ${detail}`,
+    );
+  }
+  if (!signed.startsWith("0x")) signed = `0x${signed}`;
+
+  const hash = (await evmRpc(opts.chainId, "eth_sendRawTransaction", [
+    signed,
+  ])) as string;
+  if (!hash || typeof hash !== "string") {
+    throw new Error("eth_sendRawTransaction returned empty hash");
+  }
+  return hash;
+}
+
+/**
+ * Poll until an EVM tx is mined. Required between Morpho approve → deposit
+ * (deposit estimateGas reads allowance; pending approve still looks like 0).
+ */
+export async function waitForEvmReceipt(opts: {
+  chainId: number;
+  txHash: string;
+  timeoutMs?: number;
+  pollMs?: number;
+}): Promise<{ status: "success" | "reverted"; blockNumber?: string }> {
+  const timeoutMs = opts.timeoutMs ?? 120_000;
+  const pollMs = opts.pollMs ?? 1_500;
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const receipt = (await evmRpc(opts.chainId, "eth_getTransactionReceipt", [
+      opts.txHash,
+    ])) as { status?: string; blockNumber?: string } | null;
+    if (receipt?.status != null) {
+      const ok = BigInt(receipt.status) === BigInt(1);
+      if (!ok) {
+        throw new Error(
+          `Transaction reverted on-chain (${opts.txHash.slice(0, 10)}…)`,
+        );
+      }
+      return { status: "success", blockNumber: receipt.blockNumber };
+    }
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  throw new Error(
+    `Timed out waiting for confirmation of ${opts.txHash.slice(0, 10)}…`,
+  );
+}
+
+/**
+ * Refresh blockhash, Turnkey-sign, then broadcast via JSON-RPC.
  *
  * Do NOT use Turnkey signAndSendTransaction for Solana: its helper
  * broadcasts with `encoding: "base58"`, which corrupts/rejects large
@@ -105,6 +321,13 @@ export async function signAndBroadcastSolana(opts: {
   return signature;
 }
 
+function addressesEqual(a: string, b: string): boolean {
+  if (a.startsWith("0x") || b.startsWith("0x")) {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  return a === b;
+}
+
 export function findWalletAccount(
   wallets: Array<{ accounts?: TurnkeyWalletAccount[] | null }>,
   address: string,
@@ -112,22 +335,55 @@ export function findWalletAccount(
   const needle = address.trim();
   for (const w of wallets) {
     for (const a of w.accounts ?? []) {
-      if (a.address === needle) return a;
+      if (a.address && addressesEqual(a.address, needle)) return a;
     }
   }
   return undefined;
 }
 
 /**
- * Client-side: sign/send the source-chain tx via Turnkey only.
- * - EVM → handleSendTransaction
- * - Solana → signTransaction + our RPC broadcast (base64)
+ * Resolve a Turnkey account for signing.
+ * Prefers the live kit account (checksummed address + source).
+ * Falls back to address-only for embedded wallets — Cipher stores EVM
+ * addresses lowercased, and Turnkey signTransaction only needs `signWith`.
+ */
+export function resolveSignAccount(
+  wallets: Array<{ accounts?: TurnkeyWalletAccount[] | null }> | null | undefined,
+  address: string,
+): TurnkeyWalletAccount {
+  const found = findWalletAccount(wallets ?? [], address);
+  if (found) {
+    // Prefer checksummed address for Turnkey signWith when possible.
+    if (found.address?.startsWith("0x")) {
+      try {
+        return { ...found, address: getAddress(found.address) };
+      } catch {
+        return found;
+      }
+    }
+    return found;
+  }
+  if (address.trim().startsWith("0x")) {
+    try {
+      return { address: getAddress(address.trim()) };
+    } catch {
+      return { address: address.trim() };
+    }
+  }
+  throw new Error(
+    "Turnkey wallet account not found for this address. Reconnect or refresh wallets.",
+  );
+}
+
+/**
+ * Client-side: Turnkey sign only, then broadcast on our RPCs.
+ * - EVM → signTransaction + /api/evm/rpc (QuickNode)
+ * - Solana → signTransaction + Solana RPC
  */
 export async function executeLifiAfterConfirm(opts: {
   lifiStep?: unknown;
   unsignedTx?: TxFields;
   walletAddress: string;
-  handleSendTransaction: TurnkeyEvmSend;
   signTransaction: TurnkeySignTransaction;
   walletAccount?: TurnkeyWalletAccount;
   solanaRpcUrl: string;
@@ -146,21 +402,32 @@ export async function executeLifiAfterConfirm(opts: {
   );
 
   if (to && data && isLifiEvmChain(chainId)) {
-    await opts.handleSendTransaction({
-      transaction: {
-        from: opts.walletAddress,
-        to,
-        data,
-        value,
-        caip2: `eip155:${chainId}`,
-      },
+    const walletAccount = opts.walletAccount;
+    if (!walletAccount?.address) {
+      throw new Error(
+        "EVM Turnkey wallet account not found for this address. Reconnect or refresh wallets.",
+      );
+    }
+    const txHash = await signAndBroadcastEvm({
+      from: opts.walletAddress,
+      to,
+      data,
+      value,
+      chainId,
+      gasLimit: opts.unsignedTx?.gasLimit ?? txReq?.gasLimit,
+      gasPrice: opts.unsignedTx?.gasPrice ?? txReq?.gasPrice,
+      maxFeePerGas: opts.unsignedTx?.maxFeePerGas ?? txReq?.maxFeePerGas,
+      maxPriorityFeePerGas:
+        opts.unsignedTx?.maxPriorityFeePerGas ?? txReq?.maxPriorityFeePerGas,
+      walletAccount,
+      signTransaction: opts.signTransaction,
     });
-    return { mode: "turnkey" };
+    return { mode: "turnkey", txHash };
   }
 
   if (data && isLifiSolanaChain(chainId)) {
     const walletAccount = opts.walletAccount;
-    if (!walletAccount) {
+    if (!walletAccount?.address) {
       throw new Error(
         "Solana Turnkey wallet account not found for this address. Reconnect or refresh wallets.",
       );

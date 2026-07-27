@@ -2,12 +2,15 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { useTurnkey } from "@turnkey/react-wallet-kit";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessage } from "./chat-message";
 import { ChatEmptyState } from "./empty-state";
 import { useStickToBottom } from "./use-stick-to-bottom";
+import { parseTransferSubmitted } from "@/lib/transfer-submitted";
+import { textFromParts } from "./tool-extractors";
 
 function dbRowToUIMessage(m: {
   id: string;
@@ -42,6 +45,23 @@ export function ChatPanel({
   const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
     null,
   );
+  const { wallets } = useTurnkey();
+  const signableAddressesRef = useRef<string[]>([]);
+
+  /** Live Turnkey session accounts — what Confirm can actually sign with. */
+  const signableAddresses = useMemo(() => {
+    const out: string[] = [];
+    for (const w of wallets ?? []) {
+      for (const a of w.accounts ?? []) {
+        if (a?.address) out.push(String(a.address));
+      }
+    }
+    return out;
+  }, [wallets]);
+
+  useEffect(() => {
+    signableAddressesRef.current = signableAddresses;
+  }, [signableAddresses]);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +87,16 @@ export function ChatPanel({
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        body: { chatId },
+        prepareSendMessagesRequest: ({ messages, id, trigger, messageId }) => ({
+          body: {
+            id,
+            messages,
+            trigger,
+            messageId,
+            chatId,
+            signableAddresses: signableAddressesRef.current,
+          },
+        }),
       }),
     [chatId],
   );
@@ -111,6 +140,9 @@ function ChatInner({
       transport,
       messages: initialMessages,
     });
+  const [submittedPlanIdsLocal, setSubmittedPlanIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const pendingSent = useRef(false);
   const busy = status !== "ready";
   const { endRef, scrollerRef, onScroll } = useStickToBottom([
@@ -136,12 +168,30 @@ function ChatInner({
 
   function onTxOutcome(outcome: {
     status: "approved" | "rejected";
+    planId?: string;
     agentPayload?: string;
   }) {
+    if (outcome.status === "approved" && outcome.planId) {
+      setSubmittedPlanIds((prev) => {
+        const next = new Set(prev);
+        next.add(outcome.planId!);
+        return next;
+      });
+    }
     if (outcome.status !== "approved" || !outcome.agentPayload) return;
     clearError?.();
     void sendMessage({ text: outcome.agentPayload });
   }
+
+  const submittedPlanIds = useMemo(() => {
+    const ids = new Set(submittedPlanIdsLocal);
+    for (const m of messages) {
+      const text = textFromParts(m.parts);
+      const payload = parseTransferSubmitted(text);
+      if (payload?.planId) ids.add(payload.planId);
+    }
+    return ids;
+  }, [messages, submittedPlanIdsLocal]);
 
   const lastAssistantId = [...messages]
     .reverse()
@@ -168,6 +218,7 @@ function ChatInner({
                 onRegenerate={() => void regenerate()}
                 onClarify={(text) => send(text)}
                 onTxOutcome={onTxOutcome}
+                submittedPlanIds={submittedPlanIds}
               />
             ))}
             {busy && messages[messages.length - 1]?.role === "user" && (

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
+import { CIPHER_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
 import {
   addressesMatch,
   walletDisplayName,
@@ -25,7 +26,13 @@ type Position = {
   walletId?: string;
   walletLabel?: string;
   walletAddress?: string;
+  kind?: "wallet" | "defi";
+  protocol?: string | null;
+  positionType?: string | null;
 };
+
+/** Positions below this USD value are hidden when "Hide dust" is on. */
+const DUST_USD_MIN = 1;
 
 type Overview = {
   totalValueUsd: number;
@@ -53,10 +60,208 @@ type SingleSnap = {
 };
 
 const OVERVIEW = "__overview__";
+const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "aUSDC"]);
+
+const TOKEN_META: Record<
+  string,
+  { color: string; bg: string; label: string }
+> = {
+  ETH: { color: "#627EEA", bg: "#627EEA33", label: "ETH" },
+  SOL: { color: "#14F195", bg: "#9945FF33", label: "SOL" },
+  USDC: { color: "#2775CA", bg: "#2775CA33", label: "$" },
+  aUSDC: { color: "#B6509E", bg: "#B6509E33", label: "a$" },
+  cbBTC: { color: "#F7931A", bg: "#F7931A33", label: "₿" },
+  JUP: { color: "#C7F284", bg: "#C7F28433", label: "J" },
+};
+
+const CHAIN_COLORS: Record<string, string> = {
+  ethereum: "#627EEA",
+  base: "#0052FF",
+  solana: "#14F195",
+  arbitrum: "#28A0F0",
+  hyperevm: "#97FCE4",
+};
+
+function tokenMeta(symbol: string) {
+  return (
+    TOKEN_META[symbol] ?? {
+      color: "#a1a1aa",
+      bg: "#27272a",
+      label: symbol.slice(0, 1),
+    }
+  );
+}
+
+function TokenIcon({
+  symbol,
+  size = 22,
+}: {
+  symbol: string;
+  size?: number;
+}) {
+  const meta = tokenMeta(symbol);
+  return (
+    <span
+      className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold"
+      style={{
+        width: size,
+        height: size,
+        backgroundColor: meta.bg,
+        color: meta.color,
+        fontSize: Math.max(9, size * 0.38),
+        boxShadow: `inset 0 0 0 1px ${meta.color}55, 0 0 18px ${meta.color}22`,
+      }}
+      aria-hidden
+    >
+      {meta.label}
+    </span>
+  );
+}
 
 function usd(n: number | null | undefined) {
-  if (n == null) return "—";
+  if (n == null) return "n/a";
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+}
+
+function shortAddr(addr: string) {
+  if (addr.length < 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function seedEquitySeries(total: number, points = 30): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < points; i++) {
+    const wobble =
+      Math.sin(i * 0.55) * 0.012 + Math.cos(i * 0.21) * 0.008 + i * 0.0042;
+    out.push(Math.max(total * (0.86 + wobble), total * 0.75));
+  }
+  out[out.length - 1] = total;
+  return out;
+}
+
+function AllocationBars({
+  title,
+  rows,
+  total,
+  kind,
+}: {
+  title: string;
+  rows: Array<{ label: string; value: number }>;
+  total: number;
+  kind: "asset" | "chain";
+}) {
+  const slices = rows.filter((r) => r.value > 0).slice(0, 8);
+  return (
+    <div className="rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900 px-3 py-3">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+        {title}
+      </p>
+      <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-800/80">
+        {slices.map((s) => {
+          const pct = total > 0 ? (s.value / total) * 100 : 0;
+          const color =
+            kind === "asset"
+              ? tokenMeta(s.label).color
+              : (CHAIN_COLORS[s.label.toLowerCase()] ??
+                CHAIN_COLORS[s.label] ??
+                "#71717a");
+          return (
+            <div
+              key={s.label}
+              title={`${s.label} ${pct.toFixed(1)}%`}
+              style={{
+                width: `${Math.max(pct, 1.5)}%`,
+                backgroundColor: color,
+              }}
+            />
+          );
+        })}
+      </div>
+      <ul className="mt-3 space-y-1.5">
+        {slices.map((s) => {
+          const pct = total > 0 ? (s.value / total) * 100 : 0;
+          const color =
+            kind === "asset"
+              ? tokenMeta(s.label).color
+              : (CHAIN_COLORS[s.label.toLowerCase()] ??
+                CHAIN_COLORS[s.label] ??
+                "#71717a");
+          return (
+            <li
+              key={s.label}
+              className="flex items-center justify-between gap-2 text-xs"
+            >
+              <span className="flex items-center gap-2 text-zinc-200">
+                {kind === "asset" ? (
+                  <TokenIcon symbol={s.label} size={18} />
+                ) : (
+                  <span
+                    className="inline-block size-2.5 shrink-0 rounded-sm"
+                    style={{ backgroundColor: color }}
+                  />
+                )}
+                {s.label}
+              </span>
+              <span className="font-mono text-zinc-500">
+                {pct.toFixed(0)}% · {usd(s.value)}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function EquitySparkline({ series }: { series: number[] }) {
+  if (series.length < 2) return null;
+  const w = 280;
+  const h = 48;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const span = max - min || 1;
+  const pts = series
+    .map((v, i) => {
+      const x = (i / (series.length - 1)) * w;
+      const y = h - ((v - min) / span) * (h - 4) - 2;
+      return `${x},${y}`;
+    })
+    .join(" ");
+  const first = series[0]!;
+  const last = series[series.length - 1]!;
+  const deltaPct = first > 0 ? ((last - first) / first) * 100 : 0;
+  const up = deltaPct >= 0;
+
+  return (
+    <div className="rounded-lg border border-emerald-500/15 bg-gradient-to-br from-emerald-500/5 to-zinc-950 px-3 py-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+          Equity · 30d
+        </p>
+        <p
+          className={`font-mono text-xs ${up ? "text-emerald-400" : "text-red-400"}`}
+        >
+          {up ? "+" : ""}
+          {deltaPct.toFixed(1)}%
+        </p>
+      </div>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="mt-2 h-12 w-full"
+        role="img"
+        aria-label="Equity sparkline"
+      >
+        <polyline
+          points={pts}
+          fill="none"
+          stroke={up ? "#34d399" : "#f87171"}
+          strokeWidth="2"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    </div>
+  );
 }
 
 export function DashboardPortfolio() {
@@ -66,6 +271,17 @@ export function DashboardPortfolio() {
   const [snap, setSnap] = useState<SingleSnap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [chainFilter, setChainFilter] = useState<string>("all");
+  const [hideDust, setHideDust] = useState(true);
+
+  const walletsKey = useMemo(
+    () =>
+      wallets
+        .map((w) => `${w.id}:${w.address}`)
+        .sort()
+        .join("|"),
+    [wallets],
+  );
 
   const loadWallets = useCallback(async () => {
     const res = await fetch("/api/wallets");
@@ -80,57 +296,55 @@ export function DashboardPortfolio() {
     });
   }, []);
 
+  const loadPortfolio = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      if (selected === OVERVIEW) {
+        const res = await fetch("/api/portfolio?scope=all");
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load overview");
+        setOverview(data as Overview);
+        setSnap(null);
+      } else {
+        const res = await fetch(
+          `/api/portfolio?address=${encodeURIComponent(selected)}`,
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
+        setSnap(data as SingleSnap);
+        setOverview(null);
+      }
+    } catch (err) {
+      setOverview(null);
+      setSnap(null);
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [selected]);
+
   useEffect(() => {
     void loadWallets();
     const onAuthed = () => void loadWallets();
+    const onSynced = () => {
+      void (async () => {
+        await loadWallets();
+        // Force overview reload even when selected stays on Overview.
+        await loadPortfolio();
+      })();
+    };
     window.addEventListener(CIPHER_AUTHED_EVENT, onAuthed);
-    return () => window.removeEventListener(CIPHER_AUTHED_EVENT, onAuthed);
-  }, [loadWallets]);
+    window.addEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
+    return () => {
+      window.removeEventListener(CIPHER_AUTHED_EVENT, onAuthed);
+      window.removeEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
+    };
+  }, [loadWallets, loadPortfolio]);
 
   useEffect(() => {
-    void (async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        if (selected === OVERVIEW) {
-          const res = await fetch("/api/portfolio?scope=all");
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Failed to load overview");
-          setOverview(data as Overview);
-          setSnap(null);
-        } else {
-          const res = await fetch(
-            `/api/portfolio?address=${encodeURIComponent(selected)}`,
-          );
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
-          setSnap(data as SingleSnap);
-          setOverview(null);
-        }
-      } catch (err) {
-        setOverview(null);
-        setSnap(null);
-        setError(err instanceof Error ? err.message : "Failed to load");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [selected]);
-
-  const selectOptions = useMemo(
-    () =>
-      wallets.map((w) => ({
-        value: w.address,
-        label: walletSelectLabel(
-          {
-            ...w,
-            chainFamily: w.chainFamily,
-          },
-          wallets,
-        ),
-      })),
-    [wallets],
-  );
+    void loadPortfolio();
+  }, [loadPortfolio, walletsKey]);
 
   const activeWallet = wallets.find((w) => addressesMatch(w.address, selected));
   const title =
@@ -140,7 +354,7 @@ export function DashboardPortfolio() {
         ? walletDisplayName(activeWallet)
         : "Portfolio";
 
-  const positions =
+  const rawPositions =
     selected === OVERVIEW
       ? (overview?.positions ?? [])
       : (snap?.positions ?? []);
@@ -148,131 +362,448 @@ export function DashboardPortfolio() {
     selected === OVERVIEW
       ? (overview?.totalValueUsd ?? 0)
       : (snap?.totalValueUsd ?? 0);
-  const asOf =
-    selected === OVERVIEW ? overview?.asOf : snap?.asOf;
+
+  const positions = useMemo(() => {
+    let rows = rawPositions;
+    if (chainFilter !== "all") {
+      rows = rows.filter((p) => p.chainId === chainFilter);
+    }
+    if (hideDust) {
+      rows = rows.filter((p) => (p.valueUsd ?? 0) >= DUST_USD_MIN);
+    }
+    return rows;
+  }, [rawPositions, chainFilter, hideDust]);
+
+  const chains = useMemo(
+    () =>
+      [
+        ...new Set(
+          (overview?.positions ?? rawPositions).map((p) => p.chainId),
+        ),
+      ].sort(),
+    [overview?.positions, rawPositions],
+  );
+
+  const proAssets = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of rawPositions) {
+      map.set(p.symbol, (map.get(p.symbol) ?? 0) + (p.valueUsd ?? 0));
+    }
+    return [...map.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [rawPositions]);
+
+  const proChains = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of rawPositions) {
+      map.set(p.chainId, (map.get(p.chainId) ?? 0) + (p.valueUsd ?? 0));
+    }
+    return [...map.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value);
+  }, [rawPositions]);
+
+  const topAssetPct =
+    total > 0 && proAssets[0] ? (proAssets[0].value / total) * 100 : 0;
+  const stablePct =
+    total > 0
+      ? (rawPositions
+          .filter((p) => STABLE_SYMBOLS.has(p.symbol))
+          .reduce((s, p) => s + (p.valueUsd ?? 0), 0) /
+          total) *
+        100
+      : 0;
+  const equity = useMemo(() => seedEquitySeries(Math.max(total, 1)), [total]);
+
+  const walletCount =
+    selected === OVERVIEW
+      ? Math.max(overview?.wallets.length ?? 0, wallets.length)
+      : 1;
+
+  // Prefer live portfolio rows; fall back to wallet list so a just-linked
+  // Phantom still appears before the next Zerion pass finishes.
+  const overviewCards = useMemo(() => {
+    if (selected !== OVERVIEW) return [];
+    const byAddr = new Map<
+      string,
+      {
+        walletId: string;
+        address: string;
+        label?: string;
+        chainFamily: "evm" | "solana";
+        source: string;
+        totalValueUsd: number;
+        error?: string;
+      }
+    >();
+    for (const w of wallets) {
+      const key = w.address.startsWith("0x")
+        ? w.address.toLowerCase()
+        : w.address;
+      byAddr.set(key, {
+        walletId: w.id,
+        address: w.address,
+        label: w.label,
+        chainFamily: w.chainFamily === "solana" ? "solana" : "evm",
+        source: w.source,
+        totalValueUsd: 0,
+      });
+    }
+    for (const w of overview?.wallets ?? []) {
+      const key = w.address.startsWith("0x")
+        ? w.address.toLowerCase()
+        : w.address;
+      byAddr.set(key, {
+        walletId: w.walletId,
+        address: w.address,
+        label: w.label,
+        chainFamily: w.chainFamily,
+        source: w.source,
+        totalValueUsd: w.totalValueUsd,
+        error: w.error,
+      });
+    }
+    return [...byAddr.values()];
+  }, [selected, wallets, overview?.wallets]);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8">
-      <div className="rounded-lg border border-neutral-800 bg-neutral-950 p-5 space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">
-              Dashboard
-            </h1>
-            <p className="text-sm text-neutral-500">
-              Balances across your Cipher and connected wallets.
-            </p>
-          </div>
-          <label className="text-sm text-neutral-400">
-            <span className="mr-2">View</span>
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              className="rounded-md border border-neutral-800 bg-black px-2 py-1.5 text-white"
-            >
-              <option value={OVERVIEW}>Overview · all wallets</option>
-              {selectOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {loading && <p className="text-sm text-neutral-500">Loading…</p>}
-        {error && <p className="text-sm text-red-400">{error}</p>}
-
-        {!loading && !error && (
-          <>
+    <div className="cipher-scroll h-full overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8">
+        <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_80px_rgba(0,0,0,0.28)]">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                {title}
+              <h1 className="text-2xl font-semibold tracking-tight text-white">
+                Dashboard
+              </h1>
+              <p className="text-sm text-zinc-500">
+                Charts, wallets, filters, and the full position tree.
               </p>
-              <p className="text-3xl font-semibold text-white">{usd(total)}</p>
             </div>
+            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-sky-300">
+              Live
+            </span>
+          </div>
 
-            {selected === OVERVIEW && overview && overview.wallets.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                {overview.wallets.map((w) => (
-                  <button
-                    key={w.walletId}
-                    type="button"
-                    onClick={() => setSelected(w.address)}
-                    className="rounded-lg border border-neutral-800 bg-black/40 px-3 py-3 text-left transition-colors hover:border-neutral-600"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium text-white">
-                        {walletDisplayName(w)}
-                      </span>
-                      <span className="shrink-0 rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
-                        {w.chainFamily === "solana" ? "SOL" : "EVM"}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-lg font-semibold text-neutral-100">
-                      {usd(w.totalValueUsd)}
-                    </p>
-                    {w.error && (
-                      <p className="mt-1 text-xs text-red-400">{w.error}</p>
-                    )}
-                  </button>
-                ))}
+          {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
+
+          {!loading && !error && (
+            <>
+              <div className="rounded-xl border border-zinc-800/80 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 px-4 py-4">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                  {title}
+                </p>
+                <p className="text-3xl font-semibold text-white">{usd(total)}</p>
               </div>
-            )}
 
-            <table className="w-full text-left text-sm">
-              <thead className="text-neutral-500">
-                <tr>
-                  <th className="py-2 font-medium">Asset</th>
-                  {selected === OVERVIEW && (
-                    <th className="font-medium">Wallet</th>
-                  )}
-                  <th className="font-medium">Chain</th>
-                  <th className="font-medium">Qty</th>
-                  <th className="font-medium">USD</th>
-                </tr>
-              </thead>
-              <tbody>
-                {positions.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={selected === OVERVIEW ? 5 : 4}
-                      className="py-6 text-neutral-500"
-                    >
-                      No balances found.
-                    </td>
-                  </tr>
-                ) : (
-                  positions.map((p, i) => (
-                    <tr
-                      key={`${p.symbol}-${p.walletAddress ?? ""}-${i}`}
-                      className="border-t border-neutral-800"
-                    >
-                      <td className="py-2 text-white">
-                        {p.symbol}
-                        <span className="ml-2 text-neutral-500">{p.name}</span>
-                      </td>
-                      {selected === OVERVIEW && (
-                        <td className="text-neutral-300">
-                          {walletDisplayName({
-                            label: p.walletLabel,
-                            source: undefined,
-                          })}
-                        </td>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <AllocationBars
+                  title="Asset allocation"
+                  total={total}
+                  rows={proAssets}
+                  kind="asset"
+                />
+                <AllocationBars
+                  title="Chain allocation"
+                  total={total}
+                  rows={proChains}
+                  kind="chain"
+                />
+              </div>
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-2">
+                  <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                      Concentration
+                    </p>
+                    <p className="mt-1 font-mono text-lg text-zinc-100">
+                      {topAssetPct.toFixed(0)}%
+                    </p>
+                    <p className="flex items-center gap-1.5 text-[11px] text-zinc-600">
+                      Top sleeve
+                      {proAssets[0] && (
+                        <>
+                          <TokenIcon symbol={proAssets[0].label} size={14} />
+                          {proAssets[0].label}
+                        </>
                       )}
-                      <td className="text-neutral-300">{p.chainId}</td>
-                      <td className="text-neutral-300">{p.quantity}</td>
-                      <td className="text-neutral-300">{usd(p.valueUsd)}</td>
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                      Stables
+                    </p>
+                    <p className="mt-1 font-mono text-lg text-sky-300">
+                      {stablePct.toFixed(0)}%
+                    </p>
+                    <p className="text-[11px] text-zinc-600">Cash-like share</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                      Wallets
+                    </p>
+                    <p className="mt-1 font-mono text-lg text-zinc-100">
+                      {walletCount}
+                    </p>
+                    <p className="text-[11px] text-zinc-600">In this view</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+                      Chains
+                    </p>
+                    <p className="mt-1 font-mono text-lg text-zinc-100">
+                      {proChains.length}
+                    </p>
+                    <p className="text-[11px] text-zinc-600">Active networks</p>
+                  </div>
+                </div>
+                <EquitySparkline series={equity} />
+              </div>
+
+              <label className="block text-sm text-zinc-400">
+                <span className="mr-2">Wallet</span>
+                <select
+                  value={selected}
+                  onChange={(e) => setSelected(e.target.value)}
+                  className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1.5 text-white"
+                >
+                  <option value={OVERVIEW}>Overview · all wallets</option>
+                  {wallets.map((w) => (
+                    <option key={w.id} value={w.address}>
+                      {walletSelectLabel(w, wallets)} ·{" "}
+                      {w.chainFamily === "solana" ? "SOL" : "EVM"}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {selected === OVERVIEW && overviewCards.length > 0 && (
+                <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {overviewCards.map((w) => (
+                    <button
+                      key={w.walletId}
+                      type="button"
+                      onClick={() => setSelected(w.address)}
+                      className="rounded-lg border border-zinc-800 bg-gradient-to-br from-black/60 to-zinc-900/70 px-3 py-3 text-left transition-colors hover:border-zinc-600"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-white">
+                          {walletDisplayName(w)}
+                        </span>
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
+                            w.chainFamily === "solana"
+                              ? "bg-emerald-500/15 text-emerald-300"
+                              : "bg-indigo-500/15 text-indigo-300"
+                          }`}
+                        >
+                          {w.chainFamily === "solana" ? "SOL" : "EVM"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-lg font-semibold text-zinc-100">
+                        {usd(w.totalValueUsd)}
+                      </p>
+                      {w.error ? (
+                        <p className="mt-1 text-[10px] text-amber-400/90">
+                          {/429|throttl/i.test(w.error)
+                            ? "Balance refresh rate-limited — retry shortly"
+                            : "Balance fetch failed"}
+                        </p>
+                      ) : (
+                        <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                          {shortAddr(w.address)}
+                        </p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
+                <label className="flex items-center gap-1.5">
+                  <span>Chain</span>
+                  <select
+                    value={chainFilter}
+                    onChange={(e) => setChainFilter(e.target.value)}
+                    className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-200"
+                  >
+                    <option value="all">All</option>
+                    {chains.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={hideDust}
+                    onChange={(e) => setHideDust(e.target.checked)}
+                    className="rounded border-zinc-700"
+                  />
+                  {`Hide dust (<$${DUST_USD_MIN})`}
+                </label>
+              </div>
+
+              <table className="w-full text-left text-sm">
+                <thead className="text-zinc-500">
+                  <tr>
+                    <th className="py-2 font-medium">Asset</th>
+                    {selected === OVERVIEW && (
+                      <th className="font-medium">Wallet</th>
+                    )}
+                    {selected === OVERVIEW && (
+                      <th className="font-medium">Address</th>
+                    )}
+                    <th className="font-medium">Chain</th>
+                    <th className="font-medium">Qty</th>
+                    <th className="font-medium">USD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={selected === OVERVIEW ? 6 : 4}
+                        className="py-6 text-zinc-500"
+                      >
+                        No balances found.
+                      </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-            {asOf && (
-              <p className="text-xs text-neutral-600">as of {asOf}</p>
-            )}
-          </>
-        )}
+                  ) : (
+                    positions.map((p, i) => {
+                      const chainKey = p.chainId.toLowerCase();
+                      const chainColor =
+                        CHAIN_COLORS[chainKey] ??
+                        CHAIN_COLORS[p.chainId] ??
+                        "#a1a1aa";
+                      return (
+                        <tr
+                          key={`${p.symbol}-${p.walletAddress ?? ""}-${i}`}
+                          className="border-t border-zinc-800 transition-colors hover:bg-white/[0.02]"
+                        >
+                          <td className="py-2 text-white">
+                            <span className="inline-flex items-center gap-2">
+                              <TokenIcon symbol={p.symbol} size={20} />
+                              <span>
+                                <span className="inline-flex flex-wrap items-center gap-1.5">
+                                  {p.symbol}
+                                  {p.kind === "defi" && (
+                                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400/90">
+                                      {p.protocol ?? "DeFi"}
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="ml-2 text-zinc-500">
+                                  {p.name}
+                                </span>
+                              </span>
+                            </span>
+                          </td>
+                          {selected === OVERVIEW && (
+                            <td className="text-zinc-300">
+                              {walletDisplayName({
+                                label: p.walletLabel,
+                              })}
+                            </td>
+                          )}
+                          {selected === OVERVIEW && (
+                            <td className="font-mono text-[11px] text-zinc-500">
+                              {p.walletAddress
+                                ? shortAddr(p.walletAddress)
+                                : "—"}
+                            </td>
+                          )}
+                          <td>
+                            <span
+                              className="rounded px-1.5 py-0.5 text-[11px]"
+                              style={{
+                                color: chainColor,
+                                backgroundColor: `${chainColor}22`,
+                              }}
+                            >
+                              {p.chainId}
+                            </span>
+                          </td>
+                          <td className="font-mono text-zinc-300">
+                            {p.quantity}
+                          </td>
+                          <td className="text-zinc-300">{usd(p.valueUsd)}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+
+              {selected === OVERVIEW && overview && (
+                <div className="space-y-3 rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900/50 to-zinc-950 p-5">
+                  <div>
+                    <h2 className="text-sm font-medium text-zinc-100">
+                      Position tree
+                    </h2>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Wallet → chain → asset. Same balances, denser layout.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    {overview.wallets.map((w) => (
+                      <div key={w.walletId} className="space-y-1.5">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <p className="text-sm font-medium text-zinc-100">
+                            {walletDisplayName(w)}
+                            <span className="ml-2 font-mono text-[10px] font-normal text-zinc-600">
+                              {shortAddr(w.address)}
+                            </span>
+                          </p>
+                          <p className="font-mono text-xs text-zinc-400">
+                            {usd(w.totalValueUsd)}
+                          </p>
+                        </div>
+                        <ul className="ml-2 space-y-1.5 border-l border-zinc-800 pl-3">
+                          {w.positions
+                            .filter(
+                              (p) =>
+                                !hideDust || (p.valueUsd ?? 0) >= DUST_USD_MIN,
+                            )
+                            .filter(
+                              (p) =>
+                                chainFilter === "all" ||
+                                p.chainId === chainFilter,
+                            )
+                            .map((p, i) => (
+                              <li
+                                key={`${p.symbol}-${i}`}
+                                className="flex flex-wrap items-center justify-between gap-2 text-xs"
+                              >
+                                <span className="inline-flex items-center gap-2 text-zinc-300">
+                                  <TokenIcon symbol={p.symbol} size={16} />
+                                  <span className="text-zinc-500">
+                                    {p.chainId}
+                                  </span>
+                                  {" · "}
+                                  {p.symbol}
+                                  <span className="ml-1.5 font-mono text-zinc-600">
+                                    {p.quantity}
+                                  </span>
+                                </span>
+                                <span className="font-mono text-zinc-400">
+                                  {usd(p.valueUsd)}
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -32,6 +32,19 @@ export type Clarification = {
   options: string[];
 };
 
+export type SpawnedAgent = {
+  runId: string;
+  type: string;
+  status: string;
+  href: string;
+  goal?: string;
+  withWallet?: boolean;
+  needsFunding?: boolean;
+  message?: string;
+  fundingHint?: string;
+  wallet?: { address?: string; label?: string; chainFamily?: string };
+};
+
 export type AgentStep = {
   key: string;
   toolName: string;
@@ -138,6 +151,17 @@ export function extractClarifications(
         options: output.options ?? [],
       });
     }
+  }
+  return out;
+}
+
+export function extractSpawnedAgents(parts: UIMessage["parts"]): SpawnedAgent[] {
+  const out: SpawnedAgent[] = [];
+  for (const part of parts ?? []) {
+    if (!part || typeof part !== "object" || !("type" in part)) continue;
+    if (String(part.type) !== "tool-spawn_agent") continue;
+    const output = toolOutput(part) as SpawnedAgent | undefined;
+    if (output?.runId && output?.href) out.push(output);
   }
   return out;
 }

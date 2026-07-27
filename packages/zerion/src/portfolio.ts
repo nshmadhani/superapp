@@ -1,3 +1,5 @@
+import { scheduleZerionCall } from "./rate-limit";
+
 export type PortfolioPosition = {
   symbol: string;
   name: string;
@@ -5,6 +7,10 @@ export type PortfolioPosition = {
   valueUsd: number | null;
   chainId: string;
   address: string | null;
+  /** wallet token vs DeFi protocol position (Morpho, Aave, …). */
+  kind?: "wallet" | "defi";
+  protocol?: string | null;
+  positionType?: string | null;
 };
 
 export type PortfolioSnapshot = {
@@ -15,25 +21,73 @@ export type PortfolioSnapshot = {
   chainFamily?: "evm" | "solana";
 };
 
+/** In-process TTL so dashboard + chat don't re-hit Zerion for the same wallet. */
+const CACHE_TTL_MS = 60_000;
+const RETRY_429_DELAYS_MS = [1_500, 3_000, 6_000];
+
+function isZerion429(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const status = (err as { status?: number }).status;
+  if (status === 429) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /Zerion 429|Too many requests|throttled/i.test(msg);
+}
+
+async function fetchPortfolioUncachedWithRetry(
+  address: string,
+  apiKey: string,
+): Promise<PortfolioSnapshot> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= RETRY_429_DELAYS_MS.length; attempt++) {
+    try {
+      return await fetchPortfolioUncached(address, apiKey);
+    } catch (err) {
+      lastErr = err;
+      if (!isZerion429(err) || attempt === RETRY_429_DELAYS_MS.length) {
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, RETRY_429_DELAYS_MS[attempt]!));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("portfolio_failed");
+}
+
+type CacheEntry = {
+  expiresAt: number;
+  snap: PortfolioSnapshot;
+};
+
+const cache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<PortfolioSnapshot>>();
+
+function normalizeAddress(address: string): string {
+  return address.startsWith("0x") ? address.toLowerCase() : address;
+}
+
 function detectChainFamily(address: string): "evm" | "solana" {
   return /^0x[a-fA-F0-9]{40}$/.test(address) ? "evm" : "solana";
 }
 
-/**
- * Fetch fungible positions for an EVM or Solana address via Zerion.
- * Same endpoint/schema for both chains.
- */
-export async function fetchPortfolio(
-  address: string,
-  apiKey = process.env.ZERION_API_KEY,
-): Promise<PortfolioSnapshot> {
-  if (!apiKey) throw new Error("Missing ZERION_API_KEY");
+export function clearPortfolioCache(): void {
+  cache.clear();
+  inflight.clear();
+}
 
+async function fetchPortfolioUncached(
+  address: string,
+  apiKey: string,
+): Promise<PortfolioSnapshot> {
+  const chainFamily = detectChainFamily(address);
   const url = new URL(
     `https://api.zerion.io/v1/wallets/${encodeURIComponent(address)}/positions/`,
   );
-  url.searchParams.set("filter[positions]", "only_simple");
+  // EVM: include DeFi (Morpho, lending, LP, …) plus wallet tokens.
+  // Solana: Zerion rejects filter[positions]=no_filter — use default positions.
+  if (chainFamily === "evm") {
+    url.searchParams.set("filter[positions]", "no_filter");
+  }
   url.searchParams.set("currency", "usd");
+  url.searchParams.set("filter[trash]", "only_non_trash");
 
   const res = await fetch(url, {
     headers: {
@@ -43,22 +97,30 @@ export async function fetchPortfolio(
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Zerion ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`);
+    const err = new Error(
+      `Zerion ${res.status}${text ? `: ${text.slice(0, 200)}` : ""}`,
+    ) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
 
   const body = (await res.json()) as {
     data: Array<{
       attributes: {
+        name?: string;
+        protocol?: string | null;
+        protocol_module?: string | null;
+        position_type?: string | null;
         quantity: { float: number };
         value: number | null;
-        fungible_info: {
+        fungible_info?: {
           symbol: string;
           name: string;
           implementations?: Array<{
             chain_id: string;
             address: string | null;
           }>;
-        };
+        } | null;
       };
       relationships?: {
         chain?: { data?: { id?: string } };
@@ -66,21 +128,34 @@ export async function fetchPortfolio(
     }>;
   };
 
-  const chainFamily = detectChainFamily(address);
-
   const positions: PortfolioPosition[] = (body.data ?? []).map((row) => {
-    const impl = row.attributes.fungible_info.implementations?.[0];
+    const attrs = row.attributes;
+    const impl = attrs.fungible_info?.implementations?.[0];
     const chainId =
       row.relationships?.chain?.data?.id ??
       impl?.chain_id ??
       (chainFamily === "solana" ? "solana" : "unknown");
+    const isDefi = Boolean(attrs.protocol) || attrs.position_type === "deposit";
+    const symbol =
+      attrs.fungible_info?.symbol ??
+      (attrs.protocol
+        ? String(attrs.protocol).split(/\s+/)[0]!.slice(0, 12)
+        : "POS");
+    const name = isDefi
+      ? [attrs.protocol, attrs.name].filter(Boolean).join(" · ") ||
+        attrs.name ||
+        symbol
+      : (attrs.fungible_info?.name ?? attrs.name ?? symbol);
     return {
-      symbol: row.attributes.fungible_info.symbol,
-      name: row.attributes.fungible_info.name,
-      quantity: String(row.attributes.quantity.float),
-      valueUsd: row.attributes.value,
+      symbol,
+      name,
+      quantity: String(attrs.quantity.float),
+      valueUsd: attrs.value,
       chainId,
       address: impl?.address ?? null,
+      kind: isDefi ? "defi" : "wallet",
+      protocol: attrs.protocol ?? null,
+      positionType: attrs.position_type ?? null,
     };
   });
 
@@ -92,6 +167,40 @@ export async function fetchPortfolio(
     asOf: new Date().toISOString(),
     chainFamily,
   };
+}
+
+/**
+ * Fetch fungible positions for an EVM or Solana address via Zerion.
+ * Rate-limited (≤1/sec), TTL-cached, and deduped while in flight.
+ */
+export async function fetchPortfolio(
+  address: string,
+  apiKey = process.env.ZERION_API_KEY,
+): Promise<PortfolioSnapshot> {
+  if (!apiKey) throw new Error("Missing ZERION_API_KEY");
+
+  const key = normalizeAddress(address);
+  const cached = cache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.snap;
+  }
+
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  const job = scheduleZerionCall(() =>
+    fetchPortfolioUncachedWithRetry(address, apiKey),
+  )
+    .then((snap) => {
+      cache.set(key, { snap, expiresAt: Date.now() + CACHE_TTL_MS });
+      return snap;
+    })
+    .finally(() => {
+      inflight.delete(key);
+    });
+
+  inflight.set(key, job);
+  return job;
 }
 
 export type AggregatedPortfolio = {
@@ -116,6 +225,10 @@ export type AggregatedPortfolio = {
   >;
 };
 
+/**
+ * Aggregate many wallets. Upstream calls still go through the shared
+ * 1/sec queue — do not fan out raw HTTP in parallel.
+ */
 export async function fetchAggregatedPortfolio(
   wallets: Array<{
     id: string;
@@ -125,20 +238,25 @@ export async function fetchAggregatedPortfolio(
     label?: string;
   }>,
 ): Promise<AggregatedPortfolio> {
-  const results = await Promise.all(
-    wallets.map(async (w) => {
-      try {
-        const snap = await fetchPortfolio(w.address);
-        return { wallet: w, snap, error: undefined as string | undefined };
-      } catch (err) {
-        return {
-          wallet: w,
-          snap: null,
-          error: err instanceof Error ? err.message : "portfolio_failed",
-        };
-      }
-    }),
-  );
+  const results: Array<{
+    wallet: (typeof wallets)[number];
+    snap: PortfolioSnapshot | null;
+    error?: string;
+  }> = [];
+
+  // Sequential await keeps ordering predictable; rate limiter also serializes HTTP.
+  for (const w of wallets) {
+    try {
+      const snap = await fetchPortfolio(w.address);
+      results.push({ wallet: w, snap });
+    } catch (err) {
+      results.push({
+        wallet: w,
+        snap: null,
+        error: err instanceof Error ? err.message : "portfolio_failed",
+      });
+    }
+  }
 
   const positions: AggregatedPortfolio["positions"] = [];
   const walletRows: AggregatedPortfolio["wallets"] = [];

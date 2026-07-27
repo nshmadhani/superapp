@@ -8,7 +8,13 @@ export type WalletRef = {
   label?: string;
 };
 
-export type { Plan, PlanStep, PlanUnsignedTx, ConfirmToken } from "./plan";
+export type {
+  Plan,
+  PlanStep,
+  PlanStepExecution,
+  PlanUnsignedTx,
+  ConfirmToken,
+} from "./plan";
 
 export { hashPlan } from "./plan";
 export { cleanWalletName, walletDisplayName } from "./wallet-name";

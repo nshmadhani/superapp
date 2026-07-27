@@ -35,6 +35,11 @@ export async function POST(req: Request) {
     const body = await req.json();
     const messages = (body.messages ?? []) as UIMessage[];
     const chatId = body.chatId ? String(body.chatId) : null;
+    const signableAddresses = Array.isArray(body.signableAddresses)
+      ? (body.signableAddresses as unknown[])
+          .filter((a): a is string => typeof a === "string" && a.length > 0)
+          .slice(0, 64)
+      : undefined;
 
     if (chatId) {
       const db = createDb();
@@ -103,7 +108,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const agent = createCipherAgent({ userId });
+    const agent = createCipherAgent({ userId, signableAddresses });
     const modelMessages = await convertToModelMessages(messages);
     const result = agent.stream(modelMessages);
 

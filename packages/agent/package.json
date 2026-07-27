@@ -12,13 +12,17 @@
   },
   "dependencies": {
     "@cipher/adapters": "workspace:*",
+    "@cipher/agent-jobs": "workspace:*",
     "@cipher/core": "workspace:*",
     "@cipher/db": "workspace:*",
     "@cipher/defillama": "workspace:*",
+    "@cipher/rpc": "workspace:*",
     "@cipher/search": "workspace:*",
+    "@cipher/turnkey": "workspace:*",
     "@cipher/zerion": "workspace:*",
     "@openrouter/ai-sdk-provider": "^1.5.4",
     "ai": "^5.0.0",
+    "viem": "^2.28.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

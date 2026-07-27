@@ -1,20 +1,18 @@
 "use client";
 
-import { ChatPanel } from "@/components/chat-panel";
+import { AgentRunDetail } from "@/components/agents/agent-run-detail";
 import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 
-export default function ChatIdPage() {
+export default function AgentRunPage() {
   const { authState, session, handleLogin } = useTurnkey();
+  const params = useParams<{ runId: string }>();
   const loggedIn = authState === AuthState.Authenticated && !!session;
-  const params = useParams<{ chatId: string }>();
-  const router = useRouter();
-  const chatId = params.chatId;
 
   if (!loggedIn) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <p className="text-sm text-zinc-500">Log in to open this chat.</p>
+        <p className="text-sm text-zinc-500">Log in to view this agent run.</p>
         <button
           type="button"
           onClick={() => void handleLogin()}
@@ -26,7 +24,5 @@ export default function ChatIdPage() {
     );
   }
 
-  return (
-    <ChatPanel chatId={chatId} onMissingChat={() => router.replace("/")} />
-  );
+  return <AgentRunDetail runId={params.runId} />;
 }

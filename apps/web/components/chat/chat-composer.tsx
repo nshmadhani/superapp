@@ -17,9 +17,9 @@ export function ChatComposer({
   onStop,
   busy,
   disabled,
-  placeholder = "Message Cipher…",
+  placeholder = "Message Ervo…",
   error,
-  footer = "Cipher can make mistakes. Review plans before executing.",
+  footer = "Ervo can make mistakes. Review plans before executing.",
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -63,7 +63,7 @@ export function ChatComposer({
           <p className="mb-2 text-center text-sm text-red-400">{error}</p>
         )}
         <form
-          className="flex items-end gap-1 rounded-full border border-zinc-800 bg-zinc-900/80 p-1 shadow-lg shadow-black/40 backdrop-blur"
+          className="flex items-end gap-1 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-1.5 shadow-lg shadow-black/40 backdrop-blur"
           onSubmit={submit}
         >
           <textarea

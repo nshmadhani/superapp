@@ -69,6 +69,8 @@ export async function approveConfirm(
   lifiRoute?: unknown;
   walletAddress: string;
   walletId: string;
+  plan: Plan;
+  wallets: Array<{ id: string; address: string }>;
 }> {
   const { data: planRow, error: planErr } = await db
     .from("plans")
@@ -107,7 +109,8 @@ export async function approveConfirm(
     .eq("id", opts.planId);
 
   const plan = planRow.plan_json as Plan;
-  if (!plan.unsignedTx && !plan.lifiStep) {
+  const hasLegs = (plan.stepExecutions?.length ?? 0) > 0;
+  if (!hasLegs && !plan.unsignedTx && !plan.lifiStep) {
     throw new Error("plan_missing_quote");
   }
 
@@ -118,6 +121,11 @@ export async function approveConfirm(
     .single();
   if (wErr || !wallet) throw new Error("wallet_not_found");
 
+  const { data: userWallets } = await db
+    .from("wallets")
+    .select("id, address")
+    .eq("user_id", opts.userId);
+
   return {
     planId: opts.planId,
     planHash: opts.planHash,
@@ -126,6 +134,11 @@ export async function approveConfirm(
     lifiRoute: plan.lifiRoute,
     walletAddress: wallet.address as string,
     walletId: wallet.id as string,
+    plan,
+    wallets: (userWallets ?? []).map((w) => ({
+      id: w.id as string,
+      address: w.address as string,
+    })),
   };
 }
 

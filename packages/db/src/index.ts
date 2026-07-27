@@ -1,4 +1,5 @@
 export { createDb } from "./client";
+export type { SupabaseClient } from "@supabase/supabase-js";
 export {
   savePlan,
   createConfirm,
@@ -16,3 +17,20 @@ export {
   deleteWalletByAddress,
   ensureUser,
 } from "./wallets";
+export {
+  saveAgentWallet,
+  getAgentWalletForRun,
+  getAgentWalletPrivateKey,
+  markAgentWalletDestroyed,
+  type AgentWalletRow,
+} from "./agent-wallets";
+export {
+  upsertAgentRun,
+  getAgentRun,
+  listAgentRuns,
+  listActiveAgentRuns,
+  patchAgentRun,
+  type PersistedAgentRun,
+  type PersistedAgentWallet,
+} from "./agent-runs";
+export { encryptPrivateKey, decryptPrivateKey } from "./crypto";

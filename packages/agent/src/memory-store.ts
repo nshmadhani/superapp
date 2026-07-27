@@ -79,6 +79,8 @@ export const memoryStore = {
     lifiRoute?: unknown;
     walletAddress: string;
     walletId: string;
+    plan: Plan;
+    wallets: Array<{ id: string; address: string }>;
   } {
     const stored = plans.get(planId);
     if (!stored || stored.userId !== userId) throw new Error("plan_not_found");
@@ -96,7 +98,8 @@ export const memoryStore = {
     if (row.planHash !== planHash) throw new Error("Plan hash mismatch");
     row.approvedAt = row.approvedAt ?? new Date().toISOString();
 
-    if (!stored.plan.unsignedTx && !stored.plan.lifiStep) {
+    const hasLegs = (stored.plan.stepExecutions?.length ?? 0) > 0;
+    if (!hasLegs && !stored.plan.unsignedTx && !stored.plan.lifiStep) {
       throw new Error("plan_missing_quote");
     }
 
@@ -112,6 +115,8 @@ export const memoryStore = {
       lifiRoute: stored.plan.lifiRoute,
       walletAddress: wallet.address,
       walletId: wallet.id,
+      plan: stored.plan,
+      wallets: wallets.map((w) => ({ id: w.id, address: w.address })),
     };
   },
   deleteWallet(userId: string, walletId: string) {

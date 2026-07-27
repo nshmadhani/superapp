@@ -1,9 +1,11 @@
 import { streamText, stepCountIs, type ModelMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { CIPHER_SYSTEM_PROMPT } from "./system-prompt";
+import { cipherSystemPrompt } from "./system-prompt";
+import { ensureAgentRuntime } from "./register-runtime";
 import { createCipherTools, type AgentContext } from "./tools";
 
 export function createCipherAgent(ctx: AgentContext) {
+  ensureAgentRuntime();
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("Missing OPENROUTER_API_KEY");
@@ -18,7 +20,7 @@ export function createCipherAgent(ctx: AgentContext) {
     stream(messages: ModelMessage[]) {
       return streamText({
         model: openrouter(modelId),
-        system: CIPHER_SYSTEM_PROMPT,
+        system: cipherSystemPrompt(new Date()),
         messages,
         tools,
         stopWhen: stepCountIs(12),
