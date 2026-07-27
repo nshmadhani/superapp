@@ -5,5 +5,5 @@ import { useParams } from "next/navigation";
 
 export default function ChatIdPage() {
   const params = useParams<{ chatId: string }>();
-  return <DemoChatPanel chatId={params.chatId} />;
+  return <DemoChatPanel key={params.chatId} chatId={params.chatId} />;
 }

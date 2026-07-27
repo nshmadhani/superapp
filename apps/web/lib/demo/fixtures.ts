@@ -6,6 +6,8 @@ export type DemoChat = {
   messages: UIMessage[];
   /** Optional link from an agent control panel */
   linkedAgentId?: string;
+  /** When true, DemoChatPanel plays messages as a live agent run */
+  playback?: boolean;
 };
 
 export type DemoAgentActivity = {
@@ -60,12 +62,13 @@ function toolPart(
   toolName: string,
   output: unknown,
   toolCallId: string,
+  input: unknown = {},
 ): UIMessage["parts"][number] {
   return {
     type: `tool-${toolName}`,
     toolCallId,
     state: "output-available",
-    input: {},
+    input,
     output,
   } as UIMessage["parts"][number];
 }
@@ -369,10 +372,11 @@ export const DEMO_CHATS: DemoChat[] = [
   {
     id: "e8c14f57-2a9b-4e60-8d3c-5f1a7b0e9264",
     title: "Technical analysis",
+    playback: true,
     messages: [
       userMsg(
         "t1",
-        "Can you run technical analysis on HYPE? I want history, levels, and whether a short still makes sense.",
+        "Run a proper TA pass on HYPE — daily OHLCV, structure, levels, momentum, and tell me if a short still makes sense from here.",
       ),
       assistantMsg("t2", [
         toolPart(
@@ -385,29 +389,92 @@ export const DEMO_CHATS: DemoChat[] = [
             series: hypeSeries,
             last: 20.8,
             changePct: -8.4,
+            high90: 32.4,
+            low90: 17.9,
+            rangePct: 80.9,
+            avgVolume20d: "142M",
+            lastVolume: "98M",
           },
           "tc-ohlcv",
+          {
+            symbol: "HYPE",
+            timeframe: "1D",
+            lookbackDays: 90,
+            fields: ["open", "high", "low", "close", "volume"],
+          },
         ),
         toolPart(
           "web_search",
           {
             results: [
               {
-                title: "HYPE / USD — TradingView",
+                title: "HYPEUSD — TradingView daily",
                 url: "https://www.tradingview.com/symbols/HYPEUSD/",
-                content: "Daily structure and volume profile reference.",
+                content:
+                  "Daily chart: failed reclaim of mid-20s shelf; volume fading on relief rallies.",
               },
               {
-                title: "Coingecko — HYPE market data",
+                title: "CoinGlass — HYPE funding & open interest",
+                url: "https://www.coinglass.com/",
+                content:
+                  "Perp funding elevated on prior bounce attempts; OI not expanding into the grind lower.",
+              },
+              {
+                title: "CoinGecko — Hyperliquid (HYPE)",
                 url: "https://www.coingecko.com/en/coins/hyperliquid",
-                content: "Spot reference and market cap context.",
+                content: "Spot reference · 90d high near $32, trading ~$21.",
               },
             ],
           },
           "tc-ta-search",
+          { query: "HYPE USD daily structure funding open interest volume" },
+        ),
+        toolPart(
+          "analyze_technicals",
+          {
+            type: "ta_snapshot",
+            symbol: "HYPE",
+            timeframe: "1D",
+            structure: "Lower highs / lower lows (downtrend)",
+            bias: "Short on weakness",
+            indicators: {
+              rsi14: 41.2,
+              ema20: 23.4,
+              ema50: 25.8,
+              atr14: 1.65,
+            },
+            levels: {
+              resistance: [24.0, 27.8, 30.2],
+              support: [20.8, 19.1, 17.9],
+              invalidation: 30.2,
+            },
+            volume: {
+              note: "Relief rallies print below 20d avg — weak participation",
+              vs20dAvg: "−31%",
+            },
+            risk: {
+              entryZone: "$22.8–24.0 fade",
+              stop: "above $27.8 (tight) or $30.2 (structure)",
+              targets: "$19.1 then $17.9",
+              rr: "~1.8–2.4R from mid fade",
+            },
+          },
+          "tc-ta-analyze",
+          {
+            symbol: "HYPE",
+            timeframe: "1D",
+            methods: [
+              "market_structure",
+              "support_resistance",
+              "ema_trend",
+              "rsi14",
+              "volume_context",
+              "risk_framing",
+            ],
+          },
         ),
         textPart(
-          "**HYPE · daily TA**\n\nPulled **90d** closes plus public market references.\n\n**Structure:** Lower highs off the ~32 spike. Momentum cooled; price is working a mid-20s → low-20s grind.\n\n**Bias:** Mild **short / wait-for-break** — not a chase. Cleaner if 24 breaks with follow-through; invalidated back through the 30 area.\n\n**Levels**\n- Resistance ~27.8\n- Trigger zone ~24.0\n- Target pocket ~21.4–20.8\n- Invalidation ~30.2\n\nWant the same pass on another timeframe or a second token?",
+          "**HYPE · daily technical analysis**\n\nPulled **90d OHLCV** ($17.9–$32.4), checked funding/OI context, then scored structure + momentum.\n\n### 1. Market structure\nOff the ~**$32.4** spike, price is printing **lower highs and lower lows**. Swing highs stepped down through ~30.2 → 27.8 → 24.9 → failed holds of the mid-20s. That is an active **downtrend**, not a sideways base yet.\n\n### 2. Trend filter (EMAs)\n**EMA20 (~$23.4)** and **EMA50 (~$25.8)** both slope down; spot (**$20.8**) trades **below both**. Until a daily close reclaims and holds the 20, trend bias stays bearish.\n\n### 3. Support / resistance\n| Zone | Level | Role |\n|---|---|---|\n| R1 | **$24.0** | Last breakdown shelf / short trigger |\n| R2 | **$27.8** | Prior congestion |\n| R3 / invalidate | **$30.2** | Break of bearish structure |\n| S1 | **$20.8** | Current demand test |\n| S2–S3 | **$19.1 → $17.9** | Prior base / 90d low pocket |\n\n### 4. Momentum (RSI 14)\n**RSI ≈ 41** — cooled from the spike, **not washed-out** (<30). Sellers still have room; this is not a forced long on “oversold.” No clear bullish divergence on the latest lower low.\n\n### 5. Volume context\nLast prints run **~31% below** the 20d average on bounce attempts. Weak volume on relief rallies = **low conviction shorts covering / weak bids**, which usually favors continuation lower over a V-reversal.\n\n### 6. Short thesis — still valid?\n**Yes, but don’t chase into S1.** Prefer a **fade into $22.8–24.0** (failed reclaim of the breakdown shelf) rather than market-selling the support tap.\n\n- **Entry:** weak bounce / rejection in **$22.8–24.0**\n- **Stop:** above **$27.8** (tactical) or **$30.2** (structure invalidation)\n- **Targets:** **$19.1**, stretch **$17.9**\n- **Risk:** if funding flips deeply negative and OI expands on a reclaim of $24 with rising volume, stand down — that would be a change of character, not this tape.\n\n**Bottom line:** Bias remains **short-on-weakness**. Structure, EMAs, and volume agree; RSI says the move isn’t exhausted yet. Invalidation is a sustained reclaim through **$30.2**, not a single wick.\n\nWant the same framework on the **4H** for timing, or a second token?",
         ),
       ]),
     ],

@@ -54,6 +54,13 @@ const TOOLS: Record<string, ToolMeta> = {
     description: "OHLCV and historical closes",
     Icon: TrendingUp,
   },
+  analyze_technicals: {
+    id: "analyze_technicals",
+    label: "Technical analysis",
+    verb: "Running technical analysis",
+    description: "Structure, S/R, momentum, volume, risk",
+    Icon: TrendingUp,
+  },
   ask_user: {
     id: "ask_user",
     label: "Clarify",
