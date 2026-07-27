@@ -72,7 +72,7 @@ export function WalletModal({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
-  const [walletName, setWalletName] = useState("Cipher");
+  const [walletName, setWalletName] = useState("Ervo");
   const [chain, setChain] = useState<ChainFamily>("evm");
   // Hide Cipher modal while Turnkey's connect UI is open (otherwise it stacks on top)
   const [yieldToTurnkey, setYieldToTurnkey] = useState(false);
@@ -83,7 +83,7 @@ export function WalletModal({
       setError(null);
       setBusy(null);
       setDeletingId(null);
-      setWalletName("Cipher");
+      setWalletName("Ervo");
       setChain("evm");
       setYieldToTurnkey(false);
     }
@@ -95,11 +95,51 @@ export function WalletModal({
 
   async function afterWalletMutation(mode: "embedded" | "connected") {
     await waitForCipherSession(5_000);
-    const list = await refreshWalletsThrottled(
-      () => refreshWallets() as Promise<typeof wallets>,
-      { force: true },
-    );
-    if (list.length) await syncTurnkeyWalletsToCipher(list, { mode });
+    // Connected path always hits Turnkey fresh — throttle cache often lags Phantom.
+    let list: typeof wallets = [];
+    try {
+      if (mode === "connected") {
+        list = (await refreshWallets()) as typeof wallets;
+      } else {
+        list = await refreshWalletsThrottled(
+          () => refreshWallets() as Promise<typeof wallets>,
+          { force: true },
+        );
+      }
+    } catch (err) {
+      console.warn("refreshWallets after mutation failed", err);
+    }
+    // Merge refresh + hook state so a racey refresh can't drop a just-linked Phantom.
+    const byId = new Map<string, (typeof wallets)[number]>();
+    for (const w of [...(list ?? []), ...(wallets ?? [])]) {
+      const prev = byId.get(w.walletId);
+      if (!prev || (w.accounts?.length ?? 0) >= (prev.accounts?.length ?? 0)) {
+        byId.set(w.walletId, w);
+      }
+    }
+    let merged = [...byId.values()];
+    if (
+      mode === "connected" &&
+      !merged.some((w) => String(w.source) === "connected")
+    ) {
+      await new Promise((r) => setTimeout(r, 800));
+      try {
+        const retry = (await refreshWallets()) as typeof wallets;
+        for (const w of retry ?? []) {
+          const prev = byId.get(w.walletId);
+          if (
+            !prev ||
+            (w.accounts?.length ?? 0) >= (prev.accounts?.length ?? 0)
+          ) {
+            byId.set(w.walletId, w);
+          }
+        }
+        merged = [...byId.values()];
+      } catch {
+        // keep first merge
+      }
+    }
+    await syncTurnkeyWalletsToCipher(merged as never, { mode });
   }
 
   async function onCreateEmbedded(e: FormEvent) {
@@ -118,7 +158,7 @@ export function WalletModal({
       });
       await afterWalletMutation("embedded");
       setView("list");
-      setWalletName("Cipher");
+      setWalletName("Ervo");
       setChain("evm");
     } catch (err) {
       setError(friendlyTurnkeyError(err));
@@ -342,7 +382,7 @@ export function WalletModal({
                             <div className="mb-2 text-sm font-medium text-zinc-100">
                               {cleanWalletName(w.walletName) ||
                                 w.walletName ||
-                                "Cipher"}
+                                "Ervo"}
                             </div>
                             <ul className="space-y-1.5">
                               {(w.accounts ?? []).map((a) => (
