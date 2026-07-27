@@ -145,7 +145,7 @@ const hypeSeries = [
 
 export const DEMO_CHATS: DemoChat[] = [
   {
-    id: "swap-bridge-lend",
+    id: "7f3a2c91-8b4e-4d16-9e0a-1c5f8d2b6a40",
     title: "Swap · Bridge · Lend",
     messages: [
       userMsg(
@@ -290,7 +290,7 @@ export const DEMO_CHATS: DemoChat[] = [
     ],
   },
   {
-    id: "dao-research",
+    id: "b2e91d04-6c7a-4f83-a1d5-9e8c3b0f4712",
     title: "Token / market research",
     messages: [
       userMsg(
@@ -376,7 +376,7 @@ export const DEMO_CHATS: DemoChat[] = [
     ],
   },
   {
-    id: "ta",
+    id: "e8c14f57-2a9b-4e60-8d3c-5f1a7b0e9264",
     title: "Technical analysis",
     messages: [
       userMsg(
@@ -422,9 +422,9 @@ export const DEMO_CHATS: DemoChat[] = [
     ],
   },
   {
-    id: "dca-chat",
+    id: "1a6d9e82-4f0c-48b5-9c27-3e5d8a1f7049",
     title: "DCA agent",
-    linkedAgentId: "dca",
+    linkedAgentId: "c0a8e3f1-5d2b-4a97-8e16-7b4c9d0a2f58",
     messages: [
       userMsg(
         "c1",
@@ -466,7 +466,7 @@ export const DEMO_CHATS: DemoChat[] = [
 
 export const DEMO_AGENTS: DemoAgent[] = [
   {
-    id: "dca",
+    id: "c0a8e3f1-5d2b-4a97-8e16-7b4c9d0a2f58",
     title: "DCA",
     kind: "dca",
     status: "active",
@@ -484,7 +484,7 @@ export const DEMO_AGENTS: DemoAgent[] = [
       { label: "Cadence", value: "Weekly · Mondays" },
     ],
     allowedChains: ["Base"],
-    chatId: "dca-chat",
+    chatId: "1a6d9e82-4f0c-48b5-9c27-3e5d8a1f7049",
     activity: [
       {
         id: "r1",
