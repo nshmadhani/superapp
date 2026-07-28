@@ -30,23 +30,23 @@ function isRateLimitError(err: unknown): boolean {
  * Deduped + cooled-down Turnkey wallet refresh.
  * Avoids hammering list_wallets / list_wallet_accounts (Turnkey 429s).
  */
-export async function refreshWalletsThrottled(
-  refreshWallets: () => Promise<WalletLike[]>,
+export async function refreshWalletsThrottled<T extends WalletLike>(
+  refreshWallets: () => Promise<T[] | null | undefined>,
   opts?: { force?: boolean },
-): Promise<WalletLike[]> {
+): Promise<T[]> {
   const now = Date.now();
   if (now < rateLimitedUntil && !opts?.force) {
-    return lastWallets;
+    return lastWallets as T[];
   }
   if (!opts?.force && lastOkAt && now - lastOkAt < COOLDOWN_MS) {
-    return lastWallets;
+    return lastWallets as T[];
   }
-  if (inFlight) return inFlight;
+  if (inFlight) return inFlight as Promise<T[]>;
 
   inFlight = (async () => {
     try {
       const list = await refreshWallets();
-      lastWallets = list ?? [];
+      lastWallets = (list ?? []) as WalletLike[];
       lastOkAt = Date.now();
       return lastWallets;
     } catch (err) {
@@ -64,7 +64,7 @@ export async function refreshWalletsThrottled(
     }
   })();
 
-  return inFlight;
+  return inFlight as Promise<T[]>;
 }
 
 export function getCachedTurnkeyWallets(): WalletLike[] {

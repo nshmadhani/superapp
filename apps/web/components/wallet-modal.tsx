@@ -133,10 +133,10 @@ export function WalletModal({
     let list: typeof wallets = [];
     try {
       if (mode === "connected") {
-        list = (await refreshWallets()) as typeof wallets;
+        list = (await refreshWallets()) ?? [];
       } else {
         list = await refreshWalletsThrottled(
-          () => refreshWallets() as Promise<typeof wallets>,
+          async () => (await refreshWallets()) ?? [],
           { force: true },
         );
       }
