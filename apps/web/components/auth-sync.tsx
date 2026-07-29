@@ -73,6 +73,16 @@ export function AuthSync() {
           syncedAuthKey.current = null;
           return;
         }
+
+        // Confirm cipher_user_id cookie stuck before any authenticated API calls.
+        const me = await fetch("/api/auth/me");
+        const meBody = me.ok ? await me.json() : null;
+        if (!meBody?.user?.id) {
+          console.error("auth sync ok but session cookie missing");
+          syncedAuthKey.current = null;
+          return;
+        }
+
         authReady.current = true;
 
         const queued = pendingWallets.current;

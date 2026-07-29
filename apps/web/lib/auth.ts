@@ -1,11 +1,24 @@
 import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
 import { createDb } from "@cipher/db";
 
-const COOKIE = "cipher_user_id";
+export const AUTH_COOKIE = "cipher_user_id";
+
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+function authCookieOptions() {
+  return {
+    httpOnly: true as const,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: COOKIE_MAX_AGE,
+  };
+}
 
 export async function getAuthUserId(): Promise<string | null> {
   const jar = await cookies();
-  return jar.get(COOKIE)?.value ?? null;
+  return jar.get(AUTH_COOKIE)?.value ?? null;
 }
 
 export async function requireAuthUserId(): Promise<string> {
@@ -21,19 +34,27 @@ export class AuthError extends Error {
   }
 }
 
+/** Prefer attaching the cookie to the Route Handler response (reliable with Proxy). */
+export function applyAuthCookie(res: NextResponse, userId: string): void {
+  res.cookies.set(AUTH_COOKIE, userId, authCookieOptions());
+}
+
+export function clearAuthCookie(res: NextResponse): void {
+  res.cookies.set(AUTH_COOKIE, "", {
+    ...authCookieOptions(),
+    maxAge: 0,
+  });
+}
+
+/** @deprecated Prefer applyAuthCookie on the Response — cookies().set can be dropped by Proxy. */
 export async function setAuthUserId(userId: string) {
   const jar = await cookies();
-  jar.set(COOKIE, userId, {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 365,
-  });
+  jar.set(AUTH_COOKIE, userId, authCookieOptions());
 }
 
 export async function clearAuthUserId() {
   const jar = await cookies();
-  jar.delete(COOKIE);
+  jar.set(AUTH_COOKIE, "", { ...authCookieOptions(), maxAge: 0 });
 }
 
 export type SyncAuthInput = {
@@ -44,6 +65,7 @@ export type SyncAuthInput = {
 
 /**
  * Upserts Cipher user + Supabase Auth user keyed by Turnkey sub-org.
+ * Does not set cookies — the Route Handler must call applyAuthCookie.
  */
 export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
   userId: string;
@@ -122,6 +144,5 @@ export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
     }
   }
 
-  await setAuthUserId(userId);
   return { userId, email: input.email ?? email };
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
 import { CIPHER_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
+import { waitForCipherSession } from "@/lib/cipher-session";
 import {
   addressesMatch,
   walletDisplayName,
@@ -463,6 +464,8 @@ export function DashboardPortfolio() {
   const [chainFilter, setChainFilter] = useState<string>("all");
   const [hideDust, setHideDust] = useState(true);
 
+  const [sessionReady, setSessionReady] = useState(false);
+
   const walletsKey = useMemo(
     () =>
       wallets
@@ -505,9 +508,26 @@ export function DashboardPortfolio() {
     }
   }, [selected]);
 
+  // Turnkey can be logged in before the Cipher cookie exists — wait for sync.
   useEffect(() => {
-    void loadWallets();
-    const onAuthed = () => void loadWallets();
+    let cancelled = false;
+    void (async () => {
+      setLoading(true);
+      const ready = await waitForCipherSession();
+      if (cancelled) return;
+      if (!ready) {
+        setLoading(false);
+        setError("Account sync timed out — refresh or log in again");
+        return;
+      }
+      setSessionReady(true);
+      await loadWallets();
+    })();
+
+    const onAuthed = () => {
+      setSessionReady(true);
+      void loadWallets();
+    };
     const onSynced = () => {
       void (async () => {
         await loadWallets();
@@ -517,14 +537,18 @@ export function DashboardPortfolio() {
     window.addEventListener(CIPHER_AUTHED_EVENT, onAuthed);
     window.addEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
     return () => {
+      cancelled = true;
       window.removeEventListener(CIPHER_AUTHED_EVENT, onAuthed);
       window.removeEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
     };
-  }, [loadWallets, loadPortfolio]);
+    // Intentionally once on mount + stable loaders; portfolio refetch is below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
+    if (!sessionReady) return;
     void loadPortfolio();
-  }, [loadPortfolio, walletsKey]);
+  }, [sessionReady, loadPortfolio, walletsKey]);
 
   const activeWallet = wallets.find((w) => addressesMatch(w.address, selected));
   const title =
@@ -668,7 +692,11 @@ export function DashboardPortfolio() {
           </p>
         </header>
 
-        {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+        {loading && (
+          <p className="text-sm text-zinc-500">
+            {sessionReady ? "Loading portfolio…" : "Syncing account…"}
+          </p>
+        )}
         {error && <p className="text-sm text-red-400">{error}</p>}
 
         {!loading && !error && (

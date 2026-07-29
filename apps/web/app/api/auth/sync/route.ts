@@ -1,4 +1,5 @@
-import { syncTurnkeyUser } from "@/lib/auth";
+import { applyAuthCookie, syncTurnkeyUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
@@ -8,7 +9,10 @@ export async function POST(req: Request) {
     const email = body.email ? String(body.email) : null;
 
     if (!turnkeyUserId || !turnkeySuborgId) {
-      return Response.json({ error: "missing_turnkey_identity" }, { status: 400 });
+      return NextResponse.json(
+        { error: "missing_turnkey_identity" },
+        { status: 400 },
+      );
     }
 
     const result = await syncTurnkeyUser({
@@ -17,10 +21,13 @@ export async function POST(req: Request) {
       email,
     });
 
-    return Response.json({ ok: true, ...result });
+    const res = NextResponse.json({ ok: true, ...result });
+    // Set on the Response so Proxy/middleware cannot drop cookies().set().
+    applyAuthCookie(res, result.userId);
+    return res;
   } catch (err) {
     console.error(err);
-    return Response.json(
+    return NextResponse.json(
       { error: err instanceof Error ? err.message : "sync_failed" },
       { status: 500 },
     );
