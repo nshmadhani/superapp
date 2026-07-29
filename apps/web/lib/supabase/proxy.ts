@@ -1,15 +1,35 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+function supabasePublicKey(): string | undefined {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
+    undefined
+  );
+}
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
+/**
+ * Refresh Supabase auth cookies on the request. Must never throw —
+ * a failure here becomes a site-wide 500 on every HTML page via proxy.ts.
+ */
+export async function updateSession(request: NextRequest) {
+  const passthrough = NextResponse.next({ request });
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const key = supabasePublicKey();
+
+  if (!url || !key) {
+    console.error(
+      "updateSession: missing NEXT_PUBLIC_SUPABASE_URL or publishable/anon key",
+    );
+    return passthrough;
+  }
+
+  try {
+    let supabaseResponse = passthrough;
+
+    const supabase = createServerClient(url, key, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -24,17 +44,20 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options),
           );
-          Object.entries(headers).forEach(([key, value]) =>
-            supabaseResponse.headers.set(key, value),
-          );
+          if (headers) {
+            Object.entries(headers).forEach(([headerKey, value]) =>
+              supabaseResponse.headers.set(headerKey, value),
+            );
+          }
         },
       },
-    },
-  );
+    });
 
-  // Do not run code between createServerClient and getClaims().
-  // IMPORTANT: keeps SSR auth sessions from randomly logging users out.
-  await supabase.auth.getClaims();
-
-  return supabaseResponse;
+    // Do not run code between createServerClient and getClaims().
+    await supabase.auth.getClaims();
+    return supabaseResponse;
+  } catch (err) {
+    console.error("updateSession failed:", err);
+    return NextResponse.next({ request });
+  }
 }
