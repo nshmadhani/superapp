@@ -5,13 +5,15 @@ import {
   ArrowLeft,
   Copy,
   ExternalLink,
+  Eye,
   Loader2,
   Plus,
   Trash2,
   Wallet,
   X,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
 import { CIPHER_WALLETS_SYNCED_EVENT, syncTurnkeyWalletsToCipher } from "@/lib/sync-wallets";
 import { waitForCipherSession } from "@/lib/cipher-session";
 import {
@@ -20,7 +22,19 @@ import {
   type ChainFamily,
 } from "@/lib/turnkey-wallets";
 import { refreshWalletsThrottled } from "@/lib/turnkey-refresh";
-import { cleanWalletName } from "@/lib/wallet-display";
+import {
+  addressesMatch,
+  cleanWalletName,
+  walletDisplayName,
+} from "@/lib/wallet-display";
+
+type CipherWallet = {
+  id: string;
+  address: string;
+  source: "external" | "turnkey" | string;
+  label?: string;
+  chainFamily?: "evm" | "solana";
+};
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -76,6 +90,21 @@ export function WalletModal({
   const [chain, setChain] = useState<ChainFamily>("evm");
   // Hide Cipher modal while Turnkey's connect UI is open (otherwise it stacks on top)
   const [yieldToTurnkey, setYieldToTurnkey] = useState(false);
+  const [cipherWallets, setCipherWallets] = useState<CipherWallet[]>([]);
+
+  const loadCipherWallets = useCallback(async () => {
+    try {
+      const res = await fetch("/api/wallets");
+      if (!res.ok) {
+        setCipherWallets([]);
+        return;
+      }
+      const data = await res.json();
+      setCipherWallets((data.wallets ?? []) as CipherWallet[]);
+    } catch {
+      setCipherWallets([]);
+    }
+  }, []);
 
   useEffect(() => {
     if (!open) {
@@ -86,10 +115,50 @@ export function WalletModal({
       setWalletName("Ervo");
       setChain("evm");
       setYieldToTurnkey(false);
+      return;
     }
     // Intentionally no refreshWallets on open — Turnkey state is already loaded;
     // refetching here caused 429 Resource exhausted.
-  }, [open]);
+    if (loggedIn) void loadCipherWallets();
+  }, [open, loggedIn, loadCipherWallets]);
+
+  useEffect(() => {
+    if (!open || !loggedIn) return;
+    const refresh = () => void loadCipherWallets();
+    window.addEventListener(CIPHER_AUTHED_EVENT, refresh);
+    window.addEventListener(CIPHER_WALLETS_SYNCED_EVENT, refresh);
+    return () => {
+      window.removeEventListener(CIPHER_AUTHED_EVENT, refresh);
+      window.removeEventListener(CIPHER_WALLETS_SYNCED_EVENT, refresh);
+    };
+  }, [open, loggedIn, loadCipherWallets]);
+
+  const embedded = useMemo(
+    () => (wallets ?? []).filter((w) => String(w.source) === "embedded"),
+    [wallets],
+  );
+  const connected = useMemo(
+    () => (wallets ?? []).filter((w) => String(w.source) === "connected"),
+    [wallets],
+  );
+  const sessionAddresses = useMemo(() => {
+    const addrs: string[] = [];
+    for (const w of [...embedded, ...connected]) {
+      for (const a of w.accounts ?? []) {
+        if (a.address) addrs.push(a.address);
+      }
+    }
+    return addrs;
+  }, [embedded, connected]);
+  /** DB-linked wallets not already shown as live Turnkey embedded/connected. */
+  const linked = useMemo(
+    () =>
+      cipherWallets.filter(
+        (w) =>
+          !sessionAddresses.some((addr) => addressesMatch(addr, w.address)),
+      ),
+    [cipherWallets, sessionAddresses],
+  );
 
   if (!open || yieldToTurnkey) return null;
 
@@ -269,14 +338,40 @@ export function WalletModal({
     }
   }
 
+  async function onDeleteLinked(wallet: CipherWallet) {
+    setBusy("delete");
+    setDeletingId(wallet.id);
+    setError(null);
+    try {
+      const res = await fetch("/api/wallets", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "delete",
+          walletId: wallet.id,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof body.error === "string" ? body.error : "Failed to remove",
+        );
+      }
+      await loadCipherWallets();
+      window.dispatchEvent(new CustomEvent(CIPHER_WALLETS_SYNCED_EVENT));
+    } catch (err) {
+      setError(friendlyTurnkeyError(err));
+    } finally {
+      setBusy(null);
+      setDeletingId(null);
+    }
+  }
+
   async function copy(addr: string) {
     await navigator.clipboard.writeText(addr);
     setCopied(addr);
     setTimeout(() => setCopied(null), 1500);
   }
-
-  const embedded = wallets.filter((w) => String(w.source) === "embedded");
-  const connected = wallets.filter((w) => String(w.source) === "connected");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -506,6 +601,79 @@ export function WalletModal({
                                   {shortAddr(a.address)}
                                 </div>
                               ))}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </section>
+
+                  <section className="space-y-2">
+                    <h3 className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                      Linked
+                    </h3>
+                    {linked.length === 0 ? (
+                      <p className="text-sm text-zinc-600">
+                        No other linked wallets.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {linked.map((w) => {
+                          const removing =
+                            busy === "delete" && deletingId === w.id;
+                          return (
+                            <li
+                              key={w.id}
+                              className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-3"
+                            >
+                              <div className="mb-1 flex items-center justify-between gap-2">
+                                <div className="flex min-w-0 items-center gap-1.5 text-sm font-medium text-zinc-100">
+                                  <Eye className="size-3.5 shrink-0 text-zinc-500" />
+                                  <span className="truncate">
+                                    {walletDisplayName(w)}
+                                  </span>
+                                  {w.source === "external" && (
+                                    <span className="shrink-0 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                                      Watch
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  type="button"
+                                  disabled={busy !== null}
+                                  onClick={() => void onDeleteLinked(w)}
+                                  aria-label={`Remove ${walletDisplayName(w)}`}
+                                  title="Unlink wallet"
+                                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-zinc-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                                >
+                                  {removing ? (
+                                    <Loader2 className="size-3.5 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="size-3.5" />
+                                  )}
+                                  Remove
+                                </button>
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-2 font-mono text-xs text-zinc-400">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium uppercase text-zinc-500">
+                                    {w.chainFamily === "solana"
+                                      ? "SOL"
+                                      : chainBadge(w.address)}
+                                  </span>
+                                  <span className="truncate">
+                                    {shortAddr(w.address)}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => void copy(w.address)}
+                                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200"
+                                >
+                                  <Copy className="size-3" />
+                                  {copied === w.address ? "Copied" : "Copy"}
+                                </button>
+                              </div>
                             </li>
                           );
                         })}

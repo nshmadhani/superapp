@@ -1,6 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { fetchAggregatedPortfolio, fetchPortfolio } from "@cipher/zerion";
+import {
+  fetchAggregatedPortfolio,
+  fetchPortfolio,
+  portfolioSnapshotToView,
+} from "@cipher/zerion";
 import { store } from "../store";
 import type { AgentContext } from "./index";
 
@@ -14,7 +18,7 @@ function addressesMatch(a: string, b: string): boolean {
 export function getPortfolioTool(ctx: AgentContext) {
   return tool({
     description:
-      "Fetch current token balances and USD values via Zerion for EVM or Solana wallets. Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
+      "Fetch current balances via Zerion for EVM or Solana wallets. Returns shaped portfolio: tokens (grouped by symbol across chains), positions (HL/Polymarket stub), and defi (by protocol). Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
     inputSchema: z.object({
       walletId: z
         .string()
@@ -41,11 +45,11 @@ export function getPortfolioTool(ctx: AgentContext) {
         }
 
         if (all) {
-          const aggregated = await fetchAggregatedPortfolio(wallets);
+          const view = await fetchAggregatedPortfolio(wallets);
           return {
             type: "portfolio_overview" as const,
-            ...aggregated,
-            wallets: aggregated.wallets.map((w) => ({
+            ...view,
+            wallets: view.wallets.map((w) => ({
               ...w,
               label: w.label ?? w.source,
             })),
@@ -84,9 +88,16 @@ export function getPortfolioTool(ctx: AgentContext) {
         }
 
         const snapshot = await fetchPortfolio(target.address);
+        const view = portfolioSnapshotToView(snapshot, {
+          walletId: target.id,
+          label: target.label,
+          chainFamily: target.chainFamily,
+          source: target.source,
+        });
         return {
           type: "portfolio" as const,
-          ...snapshot,
+          ...view,
+          address: target.address,
           walletId: target.id,
           label: target.label,
           source: target.source,

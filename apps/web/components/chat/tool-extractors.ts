@@ -10,14 +10,35 @@ export type PortfolioSnap = {
   address?: string;
   label?: string;
   totalValueUsd: number;
+  tokensValueUsd?: number;
+  defiValueUsd?: number;
+  positionsValueUsd?: number;
   type?: string;
-  positions: Array<{
+  /** New shaped DTO — token groups by symbol. */
+  tokens?: Array<{
     symbol: string;
     name: string;
     quantity: string;
-    valueUsd: number | null;
-    walletLabel?: string;
+    valueUsd: number;
+    chainCount?: number;
   }>;
+  defi?: Array<{
+    protocol: string;
+    valueUsd: number;
+  }>;
+  /** Legacy flat list — still accepted for older tool outputs. */
+  positions?:
+    | Array<{
+        symbol: string;
+        name: string;
+        quantity: string;
+        valueUsd: number | null;
+        walletLabel?: string;
+      }>
+    | {
+        venues?: Array<{ id: string; status: string }>;
+        valueUsd?: number;
+      };
   wallets?: Array<{
     walletId: string;
     label?: string;
@@ -128,7 +149,9 @@ export function extractPortfolios(parts: UIMessage["parts"]): PortfolioSnap[] {
     if (
       output &&
       !output.error &&
-      (output.address || output.type === "portfolio_overview")
+      (output.address ||
+        output.type === "portfolio_overview" ||
+        output.type === "portfolio")
     ) {
       snaps.push(output);
     }

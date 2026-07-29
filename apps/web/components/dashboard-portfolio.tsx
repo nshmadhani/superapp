@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
 import { CIPHER_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
 import {
@@ -8,6 +8,16 @@ import {
   walletDisplayName,
   walletSelectLabel,
 } from "@/lib/wallet-display";
+import type {
+  PortfolioLeg,
+  PortfolioView,
+  ProtocolGroup,
+  TokenGroup,
+} from "@cipher/zerion";
+import {
+  resolveChainIcon,
+  resolveProtocolIcon,
+} from "@cipher/zerion";
 
 type Wallet = {
   id: string;
@@ -17,50 +27,10 @@ type Wallet = {
   chainFamily?: "evm" | "solana";
 };
 
-type Position = {
-  symbol: string;
-  name: string;
-  quantity: string;
-  valueUsd: number | null;
-  chainId: string;
-  walletId?: string;
-  walletLabel?: string;
-  walletAddress?: string;
-  kind?: "wallet" | "defi";
-  protocol?: string | null;
-  positionType?: string | null;
-};
-
 /** Positions below this USD value are hidden when "Hide dust" is on. */
 const DUST_USD_MIN = 1;
 
-type Overview = {
-  totalValueUsd: number;
-  asOf: string;
-  wallets: Array<{
-    walletId: string;
-    address: string;
-    label?: string;
-    chainFamily: "evm" | "solana";
-    source: string;
-    totalValueUsd: number;
-    positions: Position[];
-    error?: string;
-  }>;
-  positions: Position[];
-};
-
-type SingleSnap = {
-  address: string;
-  totalValueUsd: number;
-  positions: Position[];
-  asOf: string;
-  label?: string;
-  chainFamily?: string;
-};
-
 const OVERVIEW = "__overview__";
-const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "aUSDC"]);
 
 const TOKEN_META: Record<
   string,
@@ -92,29 +62,136 @@ function tokenMeta(symbol: string) {
   );
 }
 
-function TokenIcon({
-  symbol,
-  size = 22,
+function LetterAvatar({
+  label,
+  color,
+  bg,
+  size,
 }: {
-  symbol: string;
-  size?: number;
+  label: string;
+  color: string;
+  bg: string;
+  size: number;
 }) {
-  const meta = tokenMeta(symbol);
   return (
     <span
       className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold"
       style={{
         width: size,
         height: size,
-        backgroundColor: meta.bg,
-        color: meta.color,
+        backgroundColor: bg,
+        color,
         fontSize: Math.max(9, size * 0.38),
-        boxShadow: `inset 0 0 0 1px ${meta.color}55, 0 0 18px ${meta.color}22`,
+        boxShadow: `inset 0 0 0 1px ${color}55`,
       }}
       aria-hidden
     >
-      {meta.label}
+      {label}
     </span>
+  );
+}
+
+function RemoteIcon({
+  src,
+  size,
+  fallback,
+}: {
+  src: string | null;
+  size: number;
+  fallback: ReactNode;
+}) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+  if (!src || failed) return <>{fallback}</>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      width={size}
+      height={size}
+      className="shrink-0 rounded-full bg-zinc-900 object-cover"
+      style={{ width: size, height: size }}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function TokenIcon({
+  symbol,
+  iconUrl,
+  size = 28,
+}: {
+  symbol: string;
+  iconUrl?: string | null;
+  size?: number;
+}) {
+  const meta = tokenMeta(symbol);
+  return (
+    <RemoteIcon
+      src={iconUrl ?? null}
+      size={size}
+      fallback={
+        <LetterAvatar
+          label={meta.label}
+          color={meta.color}
+          bg={meta.bg}
+          size={size}
+        />
+      }
+    />
+  );
+}
+
+function ChainIcon({
+  chainId,
+  size = 16,
+}: {
+  chainId: string;
+  size?: number;
+}) {
+  const color =
+    CHAIN_COLORS[chainId.toLowerCase()] ??
+    CHAIN_COLORS[chainId] ??
+    "#a1a1aa";
+  return (
+    <RemoteIcon
+      src={resolveChainIcon(chainId)}
+      size={size}
+      fallback={
+        <LetterAvatar
+          label={chainId.slice(0, 1).toUpperCase()}
+          color={color}
+          bg={`${color}33`}
+          size={size}
+        />
+      }
+    />
+  );
+}
+
+function ProtocolIcon({
+  protocol,
+  size = 28,
+}: {
+  protocol: string;
+  size?: number;
+}) {
+  return (
+    <RemoteIcon
+      src={resolveProtocolIcon(protocol)}
+      size={size}
+      fallback={
+        <LetterAvatar
+          label={protocol.slice(0, 2).toUpperCase()}
+          color="#34d399"
+          bg="#34d39933"
+          size={size}
+        />
+      }
+    />
   );
 }
 
@@ -128,50 +205,51 @@ function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
-function seedEquitySeries(total: number, points = 30): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < points; i++) {
-    const wobble =
-      Math.sin(i * 0.55) * 0.012 + Math.cos(i * 0.21) * 0.008 + i * 0.0042;
-    out.push(Math.max(total * (0.86 + wobble), total * 0.75));
-  }
-  out[out.length - 1] = total;
-  return out;
+function ChainBadge({ chainId }: { chainId: string }) {
+  return (
+    <span className="inline-flex shrink-0" title={chainId}>
+      <ChainIcon chainId={chainId} size={18} />
+    </span>
+  );
+}
+
+function filterLegs(
+  legs: PortfolioLeg[],
+  chainFilter: string,
+  hideDust: boolean,
+): PortfolioLeg[] {
+  return legs.filter((l) => {
+    if (chainFilter !== "all" && l.chainId !== chainFilter) return false;
+    if (hideDust && (l.valueUsd ?? 0) < DUST_USD_MIN) return false;
+    return true;
+  });
 }
 
 function AllocationBars({
   title,
   rows,
   total,
-  kind,
 }: {
   title: string;
-  rows: Array<{ label: string; value: number }>;
+  rows: Array<{ label: string; value: number; color: string }>;
   total: number;
-  kind: "asset" | "chain";
 }) {
   const slices = rows.filter((r) => r.value > 0).slice(0, 8);
   return (
-    <div className="rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900 px-3 py-3">
+    <div className="rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-3">
       <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
         {title}
       </p>
-      <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-zinc-800/80">
+      <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-zinc-800/80">
         {slices.map((s) => {
           const pct = total > 0 ? (s.value / total) * 100 : 0;
-          const color =
-            kind === "asset"
-              ? tokenMeta(s.label).color
-              : (CHAIN_COLORS[s.label.toLowerCase()] ??
-                CHAIN_COLORS[s.label] ??
-                "#71717a");
           return (
             <div
               key={s.label}
               title={`${s.label} ${pct.toFixed(1)}%`}
               style={{
                 width: `${Math.max(pct, 1.5)}%`,
-                backgroundColor: color,
+                backgroundColor: s.color,
               }}
             />
           );
@@ -180,26 +258,16 @@ function AllocationBars({
       <ul className="mt-3 space-y-1.5">
         {slices.map((s) => {
           const pct = total > 0 ? (s.value / total) * 100 : 0;
-          const color =
-            kind === "asset"
-              ? tokenMeta(s.label).color
-              : (CHAIN_COLORS[s.label.toLowerCase()] ??
-                CHAIN_COLORS[s.label] ??
-                "#71717a");
           return (
             <li
               key={s.label}
               className="flex items-center justify-between gap-2 text-xs"
             >
               <span className="flex items-center gap-2 text-zinc-200">
-                {kind === "asset" ? (
-                  <TokenIcon symbol={s.label} size={18} />
-                ) : (
-                  <span
-                    className="inline-block size-2.5 shrink-0 rounded-sm"
-                    style={{ backgroundColor: color }}
-                  />
-                )}
+                <span
+                  className="inline-block size-2 shrink-0 rounded-sm"
+                  style={{ backgroundColor: s.color }}
+                />
                 {s.label}
               </span>
               <span className="font-mono text-zinc-500">
@@ -213,53 +281,175 @@ function AllocationBars({
   );
 }
 
-function EquitySparkline({ series }: { series: number[] }) {
-  if (series.length < 2) return null;
-  const w = 280;
-  const h = 48;
-  const min = Math.min(...series);
-  const max = Math.max(...series);
-  const span = max - min || 1;
-  const pts = series
-    .map((v, i) => {
-      const x = (i / (series.length - 1)) * w;
-      const y = h - ((v - min) / span) * (h - 4) - 2;
-      return `${x},${y}`;
-    })
-    .join(" ");
-  const first = series[0]!;
-  const last = series[series.length - 1]!;
-  const deltaPct = first > 0 ? ((last - first) / first) * 100 : 0;
-  const up = deltaPct >= 0;
+function TokenGroupRow({
+  group,
+  showWallet,
+}: {
+  group: TokenGroup;
+  showWallet: boolean;
+}) {
+  const multi = group.legs.length > 1 || group.chainCount > 1;
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-lg border border-emerald-500/15 bg-gradient-to-br from-emerald-500/5 to-zinc-950 px-3 py-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-          Equity · 30d
-        </p>
-        <p
-          className={`font-mono text-xs ${up ? "text-emerald-400" : "text-red-400"}`}
-        >
-          {up ? "+" : ""}
-          {deltaPct.toFixed(1)}%
-        </p>
-      </div>
-      <svg
-        viewBox={`0 0 ${w} ${h}`}
-        className="mt-2 h-12 w-full"
-        role="img"
-        aria-label="Equity sparkline"
+    <div className="border-t border-zinc-800/80">
+      <button
+        type="button"
+        onClick={() => multi && setOpen((v) => !v)}
+        className={`flex w-full items-center gap-3 py-3 text-left ${
+          multi ? "cursor-pointer hover:bg-white/[0.02]" : "cursor-default"
+        }`}
+        disabled={!multi}
+        aria-expanded={multi ? open : undefined}
       >
-        <polyline
-          points={pts}
-          fill="none"
-          stroke={up ? "#34d399" : "#f87171"}
-          strokeWidth="2"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      </svg>
+        <TokenIcon symbol={group.symbol} iconUrl={group.iconUrl} size={28} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-white">{group.symbol}</span>
+            {group.chainCount > 1 && (
+              <span className="inline-flex items-center gap-1 rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-400">
+                <span className="inline-flex -space-x-1.5">
+                  {[...new Set(group.legs.map((l) => l.chainId))]
+                    .slice(0, 3)
+                    .map((c) => (
+                      <ChainIcon key={c} chainId={c} size={16} />
+                    ))}
+                </span>
+                {group.chainCount} chains
+              </span>
+            )}
+            {!multi && group.legs[0] && (
+              <ChainBadge chainId={group.legs[0].chainId} />
+            )}
+          </div>
+          <p className="truncate text-xs text-zinc-500">{group.name}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="font-mono text-sm text-zinc-100">
+            {usd(group.valueUsd)}
+          </p>
+          <p className="font-mono text-[11px] text-zinc-500">
+            {group.quantity}
+          </p>
+        </div>
+        {multi && (
+          <span className="w-4 shrink-0 text-center text-zinc-500">
+            {open ? "▾" : "▸"}
+          </span>
+        )}
+      </button>
+      {multi && open && (
+        <ul className="mb-2 ml-10 space-y-1.5 border-l border-zinc-800 pl-3">
+          {group.legs.map((leg, i) => (
+            <li
+              key={`${leg.chainId}-${leg.walletAddress ?? ""}-${i}`}
+              className="flex flex-wrap items-center justify-between gap-2 py-1 text-xs"
+            >
+              <span className="inline-flex flex-wrap items-center gap-2 text-zinc-300">
+                <ChainBadge chainId={leg.chainId} />
+                {showWallet && leg.walletLabel && (
+                  <span className="text-zinc-500">
+                    {walletDisplayName({ label: leg.walletLabel })}
+                  </span>
+                )}
+                <span className="font-mono text-zinc-500">{leg.quantity}</span>
+              </span>
+              <span className="font-mono text-zinc-400">
+                {usd(leg.valueUsd)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ProtocolGroupRow({
+  group,
+  showWallet,
+}: {
+  group: ProtocolGroup;
+  showWallet: boolean;
+}) {
+  const multi = group.legs.length > 1;
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="border-t border-zinc-800/80">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full cursor-pointer items-center gap-3 py-3 text-left hover:bg-white/[0.02]"
+        aria-expanded={open}
+      >
+        <ProtocolIcon protocol={group.protocol} size={28} />
+        <div className="min-w-0 flex-1">
+          <p className="font-medium text-white">{group.protocol}</p>
+          <p className="text-xs text-zinc-500">
+            {group.legs.length} position{group.legs.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <p className="shrink-0 font-mono text-sm text-zinc-100">
+          {usd(group.valueUsd)}
+        </p>
+        <span className="w-4 shrink-0 text-center text-zinc-500">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open && (
+        <ul className="mb-2 ml-10 space-y-1.5 border-l border-zinc-800 pl-3">
+          {group.legs.map((leg, i) => (
+            <li
+              key={`${leg.symbol}-${leg.chainId}-${i}`}
+              className="flex flex-wrap items-center justify-between gap-2 py-1 text-xs"
+            >
+              <span className="inline-flex flex-wrap items-center gap-2 text-zinc-300">
+                <TokenIcon
+                  symbol={leg.symbol}
+                  iconUrl={leg.iconUrl}
+                  size={18}
+                />
+                <span className="text-zinc-200">{leg.symbol}</span>
+                <ChainBadge chainId={leg.chainId} />
+                {leg.positionType && (
+                  <span className="text-zinc-600">{leg.positionType}</span>
+                )}
+                {showWallet && leg.walletLabel && (
+                  <span className="text-zinc-500">
+                    {walletDisplayName({ label: leg.walletLabel })}
+                  </span>
+                )}
+              </span>
+              <span className="font-mono text-zinc-400">
+                {usd(leg.valueUsd)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  total,
+  hint,
+}: {
+  title: string;
+  total: number;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 pb-1">
+      <div>
+        <h2 className="text-sm font-semibold tracking-wide text-zinc-100">
+          {title}
+        </h2>
+        {hint && <p className="mt-0.5 text-xs text-zinc-500">{hint}</p>}
+      </div>
+      <p className="font-mono text-sm text-zinc-300">{usd(total)}</p>
     </div>
   );
 }
@@ -267,8 +457,7 @@ function EquitySparkline({ series }: { series: number[] }) {
 export function DashboardPortfolio() {
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [selected, setSelected] = useState<string>(OVERVIEW);
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [snap, setSnap] = useState<SingleSnap | null>(null);
+  const [view, setView] = useState<PortfolioView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [chainFilter, setChainFilter] = useState<string>("all");
@@ -300,24 +489,16 @@ export function DashboardPortfolio() {
     setLoading(true);
     setError(null);
     try {
-      if (selected === OVERVIEW) {
-        const res = await fetch("/api/portfolio?scope=all");
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load overview");
-        setOverview(data as Overview);
-        setSnap(null);
-      } else {
-        const res = await fetch(
-          `/api/portfolio?address=${encodeURIComponent(selected)}`,
-        );
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
-        setSnap(data as SingleSnap);
-        setOverview(null);
-      }
+      const url =
+        selected === OVERVIEW
+          ? "/api/portfolio?scope=all"
+          : `/api/portfolio?address=${encodeURIComponent(selected)}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
+      setView(data as PortfolioView);
     } catch (err) {
-      setOverview(null);
-      setSnap(null);
+      setView(null);
       setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
@@ -330,7 +511,6 @@ export function DashboardPortfolio() {
     const onSynced = () => {
       void (async () => {
         await loadWallets();
-        // Force overview reload even when selected stays on Overview.
         await loadPortfolio();
       })();
     };
@@ -354,75 +534,84 @@ export function DashboardPortfolio() {
         ? walletDisplayName(activeWallet)
         : "Portfolio";
 
-  const rawPositions =
-    selected === OVERVIEW
-      ? (overview?.positions ?? [])
-      : (snap?.positions ?? []);
-  const total =
-    selected === OVERVIEW
-      ? (overview?.totalValueUsd ?? 0)
-      : (snap?.totalValueUsd ?? 0);
+  const total = view?.totalValueUsd ?? 0;
+  const showWallet = selected === OVERVIEW;
 
-  const positions = useMemo(() => {
-    let rows = rawPositions;
-    if (chainFilter !== "all") {
-      rows = rows.filter((p) => p.chainId === chainFilter);
-    }
-    if (hideDust) {
-      rows = rows.filter((p) => (p.valueUsd ?? 0) >= DUST_USD_MIN);
-    }
-    return rows;
-  }, [rawPositions, chainFilter, hideDust]);
+  const filteredTokens = useMemo(() => {
+    if (!view) return [];
+    return view.tokens
+      .map((g) => {
+        const legs = filterLegs(g.legs, chainFilter, hideDust);
+        if (legs.length === 0) return null;
+        const valueUsd = legs.reduce((s, l) => s + (l.valueUsd ?? 0), 0);
+        const qtySum = legs.reduce(
+          (s, l) => s + (Number.parseFloat(l.quantity) || 0),
+          0,
+        );
+        const chains = new Set(legs.map((l) => l.chainId));
+        return {
+          ...g,
+          legs,
+          valueUsd,
+          quantity: String(Number(qtySum.toPrecision(6))),
+          chainCount: chains.size,
+        } satisfies TokenGroup;
+      })
+      .filter((g): g is TokenGroup => g != null)
+      .sort((a, b) => b.valueUsd - a.valueUsd);
+  }, [view, chainFilter, hideDust]);
 
-  const chains = useMemo(
+  const filteredDefi = useMemo(() => {
+    if (!view) return [];
+    return view.defi
+      .map((g) => {
+        const legs = filterLegs(g.legs, chainFilter, hideDust);
+        if (legs.length === 0) return null;
+        return {
+          ...g,
+          legs,
+          valueUsd: legs.reduce((s, l) => s + (l.valueUsd ?? 0), 0),
+        } satisfies ProtocolGroup;
+      })
+      .filter((g): g is ProtocolGroup => g != null)
+      .sort((a, b) => b.valueUsd - a.valueUsd);
+  }, [view, chainFilter, hideDust]);
+
+  const tokensTotal = filteredTokens.reduce((s, t) => s + t.valueUsd, 0);
+  const defiTotal = filteredDefi.reduce((s, d) => s + d.valueUsd, 0);
+
+  const chains = useMemo(() => {
+    if (!view) return [];
+    const ids = new Set<string>();
+    for (const t of view.tokens) for (const l of t.legs) ids.add(l.chainId);
+    for (const d of view.defi) for (const l of d.legs) ids.add(l.chainId);
+    return [...ids].sort();
+  }, [view]);
+
+  const sleeveRows = useMemo(
     () =>
       [
-        ...new Set(
-          (overview?.positions ?? rawPositions).map((p) => p.chainId),
-        ),
-      ].sort(),
-    [overview?.positions, rawPositions],
+        { label: "Tokens", value: tokensTotal, color: "#38bdf8" },
+        { label: "DeFi", value: defiTotal, color: "#34d399" },
+        {
+          label: "Positions",
+          value: view?.positionsValueUsd ?? 0,
+          color: "#a78bfa",
+        },
+      ].filter((r) => r.value > 0 || r.label === "Tokens"),
+    [tokensTotal, defiTotal, view?.positionsValueUsd],
   );
 
-  const proAssets = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const p of rawPositions) {
-      map.set(p.symbol, (map.get(p.symbol) ?? 0) + (p.valueUsd ?? 0));
-    }
-    return [...map.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [rawPositions]);
+  const assetRows = useMemo(
+    () =>
+      filteredTokens.slice(0, 8).map((t) => ({
+        label: t.symbol,
+        value: t.valueUsd,
+        color: tokenMeta(t.symbol).color,
+      })),
+    [filteredTokens],
+  );
 
-  const proChains = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const p of rawPositions) {
-      map.set(p.chainId, (map.get(p.chainId) ?? 0) + (p.valueUsd ?? 0));
-    }
-    return [...map.entries()]
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [rawPositions]);
-
-  const topAssetPct =
-    total > 0 && proAssets[0] ? (proAssets[0].value / total) * 100 : 0;
-  const stablePct =
-    total > 0
-      ? (rawPositions
-          .filter((p) => STABLE_SYMBOLS.has(p.symbol))
-          .reduce((s, p) => s + (p.valueUsd ?? 0), 0) /
-          total) *
-        100
-      : 0;
-  const equity = useMemo(() => seedEquitySeries(Math.max(total, 1)), [total]);
-
-  const walletCount =
-    selected === OVERVIEW
-      ? Math.max(overview?.wallets.length ?? 0, wallets.length)
-      : 1;
-
-  // Prefer live portfolio rows; fall back to wallet list so a just-linked
-  // Phantom still appears before the next Zerion pass finishes.
   const overviewCards = useMemo(() => {
     if (selected !== OVERVIEW) return [];
     const byAddr = new Map<
@@ -450,7 +639,7 @@ export function DashboardPortfolio() {
         totalValueUsd: 0,
       });
     }
-    for (const w of overview?.wallets ?? []) {
+    for (const w of view?.wallets ?? []) {
       const key = w.address.startsWith("0x")
         ? w.address.toLowerCase()
         : w.address;
@@ -465,105 +654,72 @@ export function DashboardPortfolio() {
       });
     }
     return [...byAddr.values()];
-  }, [selected, wallets, overview?.wallets]);
+  }, [selected, wallets, view?.wallets]);
 
   return (
     <div className="cipher-scroll h-full overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8">
-        <div className="space-y-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 shadow-[0_0_0_1px_rgba(255,255,255,0.02),0_24px_80px_rgba(0,0,0,0.28)]">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-white">
-                Dashboard
-              </h1>
-              <p className="text-sm text-zinc-500">
-                Charts, wallets, filters, and the full position tree.
+      <div className="flex w-full flex-col gap-5 px-6 py-8 lg:px-10">
+        <header className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            Dashboard
+          </h1>
+          <p className="text-sm text-zinc-500">
+            Tokens, venue positions, and DeFi — by wallet.
+          </p>
+        </header>
+
+        {loading && <p className="text-sm text-zinc-500">Loading…</p>}
+        {error && <p className="text-sm text-red-400">{error}</p>}
+
+        {!loading && !error && (
+          <>
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-4 py-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                {title}
               </p>
+              <p className="mt-1 text-3xl font-semibold text-white">
+                {usd(total)}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-3 text-xs text-zinc-500">
+                <span>
+                  Tokens{" "}
+                  <span className="font-mono text-zinc-300">
+                    {usd(tokensTotal)}
+                  </span>
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span>
+                  DeFi{" "}
+                  <span className="font-mono text-zinc-300">
+                    {usd(defiTotal)}
+                  </span>
+                </span>
+                <span className="text-zinc-700">·</span>
+                <span>
+                  Positions{" "}
+                  <span className="font-mono text-zinc-300">
+                    {usd(view?.positionsValueUsd ?? 0)}
+                  </span>
+                </span>
+              </div>
             </div>
-            <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-sky-300">
-              Live
-            </span>
-          </div>
 
-          {loading && <p className="text-sm text-zinc-500">Loading…</p>}
-          {error && <p className="text-sm text-red-400">{error}</p>}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <AllocationBars
+                title="By sleeve"
+                total={Math.max(tokensTotal + defiTotal, 1)}
+                rows={sleeveRows}
+              />
+              <AllocationBars
+                title="Top tokens"
+                total={Math.max(tokensTotal, 1)}
+                rows={assetRows}
+              />
+            </div>
 
-          {!loading && !error && (
-            <>
-              <div className="rounded-xl border border-zinc-800/80 bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 px-4 py-4">
-                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  {title}
-                </p>
-                <p className="text-3xl font-semibold text-white">{usd(total)}</p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <AllocationBars
-                  title="Asset allocation"
-                  total={total}
-                  rows={proAssets}
-                  kind="asset"
-                />
-                <AllocationBars
-                  title="Chain allocation"
-                  total={total}
-                  rows={proChains}
-                  kind="chain"
-                />
-              </div>
-
-              <div className="grid gap-3 lg:grid-cols-3">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:col-span-2">
-                  <div className="rounded-lg border border-violet-500/15 bg-violet-500/5 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Concentration
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {topAssetPct.toFixed(0)}%
-                    </p>
-                    <p className="flex items-center gap-1.5 text-[11px] text-zinc-600">
-                      Top sleeve
-                      {proAssets[0] && (
-                        <>
-                          <TokenIcon symbol={proAssets[0].label} size={14} />
-                          {proAssets[0].label}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-sky-500/15 bg-sky-500/5 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Stables
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-sky-300">
-                      {stablePct.toFixed(0)}%
-                    </p>
-                    <p className="text-[11px] text-zinc-600">Cash-like share</p>
-                  </div>
-                  <div className="rounded-lg border border-amber-500/15 bg-amber-500/5 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Wallets
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {walletCount}
-                    </p>
-                    <p className="text-[11px] text-zinc-600">In this view</p>
-                  </div>
-                  <div className="rounded-lg border border-emerald-500/15 bg-emerald-500/5 px-3 py-3">
-                    <p className="text-[11px] uppercase tracking-wide text-zinc-500">
-                      Chains
-                    </p>
-                    <p className="mt-1 font-mono text-lg text-zinc-100">
-                      {proChains.length}
-                    </p>
-                    <p className="text-[11px] text-zinc-600">Active networks</p>
-                  </div>
-                </div>
-                <EquitySparkline series={equity} />
-              </div>
-
-              <label className="block text-sm text-zinc-400">
-                <span className="mr-2">Wallet</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm text-zinc-400">
+                <span>Wallet</span>
                 <select
                   value={selected}
                   onChange={(e) => setSelected(e.target.value)}
@@ -578,232 +734,158 @@ export function DashboardPortfolio() {
                   ))}
                 </select>
               </label>
-
-              {selected === OVERVIEW && overviewCards.length > 0 && (
-                <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                  {overviewCards.map((w) => (
-                    <button
-                      key={w.walletId}
-                      type="button"
-                      onClick={() => setSelected(w.address)}
-                      className="rounded-lg border border-zinc-800 bg-gradient-to-br from-black/60 to-zinc-900/70 px-3 py-3 text-left transition-colors hover:border-zinc-600"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-medium text-white">
-                          {walletDisplayName(w)}
-                        </span>
-                        <span
-                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
-                            w.chainFamily === "solana"
-                              ? "bg-emerald-500/15 text-emerald-300"
-                              : "bg-indigo-500/15 text-indigo-300"
-                          }`}
-                        >
-                          {w.chainFamily === "solana" ? "SOL" : "EVM"}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-lg font-semibold text-zinc-100">
-                        {usd(w.totalValueUsd)}
-                      </p>
-                      {w.error ? (
-                        <p className="mt-1 text-[10px] text-amber-400/90">
-                          {/429|throttl/i.test(w.error)
-                            ? "Balance refresh rate-limited — retry shortly"
-                            : "Balance fetch failed"}
-                        </p>
-                      ) : (
-                        <p className="mt-1 font-mono text-[10px] text-zinc-600">
-                          {shortAddr(w.address)}
-                        </p>
-                      )}
-                    </button>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <span>Chain</span>
+                <select
+                  value={chainFilter}
+                  onChange={(e) => setChainFilter(e.target.value)}
+                  className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-200"
+                >
+                  <option value="all">All</option>
+                  {chains.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
                   ))}
-                </div>
-              )}
+                </select>
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <input
+                  type="checkbox"
+                  checked={hideDust}
+                  onChange={(e) => setHideDust(e.target.checked)}
+                  className="rounded border-zinc-700"
+                />
+                {`Hide dust (<$${DUST_USD_MIN})`}
+              </label>
+            </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-400">
-                <label className="flex items-center gap-1.5">
-                  <span>Chain</span>
-                  <select
-                    value={chainFilter}
-                    onChange={(e) => setChainFilter(e.target.value)}
-                    className="rounded-md border border-zinc-800 bg-zinc-950 px-2 py-1 text-zinc-200"
+            {selected === OVERVIEW && overviewCards.length > 0 && (
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {overviewCards.map((w) => (
+                  <button
+                    key={w.walletId}
+                    type="button"
+                    onClick={() => setSelected(w.address)}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-3 text-left transition-colors hover:border-zinc-600"
                   >
-                    <option value="all">All</option>
-                    {chains.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={hideDust}
-                    onChange={(e) => setHideDust(e.target.checked)}
-                    className="rounded border-zinc-700"
-                  />
-                  {`Hide dust (<$${DUST_USD_MIN})`}
-                </label>
-              </div>
-
-              <table className="w-full text-left text-sm">
-                <thead className="text-zinc-500">
-                  <tr>
-                    <th className="py-2 font-medium">Asset</th>
-                    {selected === OVERVIEW && (
-                      <th className="font-medium">Wallet</th>
-                    )}
-                    {selected === OVERVIEW && (
-                      <th className="font-medium">Address</th>
-                    )}
-                    <th className="font-medium">Chain</th>
-                    <th className="font-medium">Qty</th>
-                    <th className="font-medium">USD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {positions.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={selected === OVERVIEW ? 6 : 4}
-                        className="py-6 text-zinc-500"
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm font-medium text-white">
+                        {walletDisplayName(w)}
+                      </span>
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide ${
+                          w.chainFamily === "solana"
+                            ? "bg-emerald-500/15 text-emerald-300"
+                            : "bg-indigo-500/15 text-indigo-300"
+                        }`}
                       >
-                        No balances found.
-                      </td>
-                    </tr>
-                  ) : (
-                    positions.map((p, i) => {
-                      const chainKey = p.chainId.toLowerCase();
-                      const chainColor =
-                        CHAIN_COLORS[chainKey] ??
-                        CHAIN_COLORS[p.chainId] ??
-                        "#a1a1aa";
-                      return (
-                        <tr
-                          key={`${p.symbol}-${p.walletAddress ?? ""}-${i}`}
-                          className="border-t border-zinc-800 transition-colors hover:bg-white/[0.02]"
-                        >
-                          <td className="py-2 text-white">
-                            <span className="inline-flex items-center gap-2">
-                              <TokenIcon symbol={p.symbol} size={20} />
-                              <span>
-                                <span className="inline-flex flex-wrap items-center gap-1.5">
-                                  {p.symbol}
-                                  {p.kind === "defi" && (
-                                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400/90">
-                                      {p.protocol ?? "DeFi"}
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="ml-2 text-zinc-500">
-                                  {p.name}
-                                </span>
-                              </span>
-                            </span>
-                          </td>
-                          {selected === OVERVIEW && (
-                            <td className="text-zinc-300">
-                              {walletDisplayName({
-                                label: p.walletLabel,
-                              })}
-                            </td>
-                          )}
-                          {selected === OVERVIEW && (
-                            <td className="font-mono text-[11px] text-zinc-500">
-                              {p.walletAddress
-                                ? shortAddr(p.walletAddress)
-                                : "—"}
-                            </td>
-                          )}
-                          <td>
-                            <span
-                              className="rounded px-1.5 py-0.5 text-[11px]"
-                              style={{
-                                color: chainColor,
-                                backgroundColor: `${chainColor}22`,
-                              }}
-                            >
-                              {p.chainId}
-                            </span>
-                          </td>
-                          <td className="font-mono text-zinc-300">
-                            {p.quantity}
-                          </td>
-                          <td className="text-zinc-300">{usd(p.valueUsd)}</td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-
-              {selected === OVERVIEW && overview && (
-                <div className="space-y-3 rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900/50 to-zinc-950 p-5">
-                  <div>
-                    <h2 className="text-sm font-medium text-zinc-100">
-                      Position tree
-                    </h2>
-                    <p className="mt-1 text-xs text-zinc-500">
-                      Wallet → chain → asset. Same balances, denser layout.
+                        {w.chainFamily === "solana" ? "SOL" : "EVM"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-lg font-semibold text-zinc-100">
+                      {usd(w.totalValueUsd)}
                     </p>
-                  </div>
-                  <div className="space-y-4">
-                    {overview.wallets.map((w) => (
-                      <div key={w.walletId} className="space-y-1.5">
-                        <div className="flex flex-wrap items-baseline justify-between gap-2">
-                          <p className="text-sm font-medium text-zinc-100">
-                            {walletDisplayName(w)}
-                            <span className="ml-2 font-mono text-[10px] font-normal text-zinc-600">
-                              {shortAddr(w.address)}
-                            </span>
-                          </p>
-                          <p className="font-mono text-xs text-zinc-400">
-                            {usd(w.totalValueUsd)}
-                          </p>
-                        </div>
-                        <ul className="ml-2 space-y-1.5 border-l border-zinc-800 pl-3">
-                          {w.positions
-                            .filter(
-                              (p) =>
-                                !hideDust || (p.valueUsd ?? 0) >= DUST_USD_MIN,
-                            )
-                            .filter(
-                              (p) =>
-                                chainFilter === "all" ||
-                                p.chainId === chainFilter,
-                            )
-                            .map((p, i) => (
-                              <li
-                                key={`${p.symbol}-${i}`}
-                                className="flex flex-wrap items-center justify-between gap-2 text-xs"
-                              >
-                                <span className="inline-flex items-center gap-2 text-zinc-300">
-                                  <TokenIcon symbol={p.symbol} size={16} />
-                                  <span className="text-zinc-500">
-                                    {p.chainId}
-                                  </span>
-                                  {" · "}
-                                  {p.symbol}
-                                  <span className="ml-1.5 font-mono text-zinc-600">
-                                    {p.quantity}
-                                  </span>
-                                </span>
-                                <span className="font-mono text-zinc-400">
-                                  {usd(p.valueUsd)}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
+                    {w.error ? (
+                      <p className="mt-1 text-[10px] text-amber-400/90">
+                        {/429|throttl/i.test(w.error)
+                          ? "Balance refresh rate-limited — retry shortly"
+                          : "Balance fetch failed"}
+                      </p>
+                    ) : (
+                      <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                        {shortAddr(w.address)}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="grid gap-5 xl:grid-cols-2 xl:items-start">
+              <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 xl:col-span-1">
+                <SectionHeader
+                  title="Tokens"
+                  total={tokensTotal}
+                  hint="Grouped by symbol across chains"
+                />
+                {filteredTokens.length === 0 ? (
+                  <p className="border-t border-zinc-800/80 py-6 text-sm text-zinc-500">
+                    No token balances.
+                  </p>
+                ) : (
+                  filteredTokens.map((g) => (
+                    <TokenGroupRow
+                      key={g.symbol.toUpperCase()}
+                      group={g}
+                      showWallet={showWallet}
+                    />
+                  ))
+                )}
+              </section>
+
+              <div className="flex flex-col gap-5">
+                <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                  <SectionHeader
+                    title="Positions"
+                    total={view?.positionsValueUsd ?? 0}
+                    hint="Hyperliquid & Polymarket"
+                  />
+                  <ul className="border-t border-zinc-800/80">
+                    {(
+                      view?.positions.venues ?? [
+                        {
+                          id: "hyperliquid" as const,
+                          status: "coming_soon" as const,
+                        },
+                        {
+                          id: "polymarket" as const,
+                          status: "coming_soon" as const,
+                        },
+                      ]
+                    ).map((v) => (
+                      <li
+                        key={v.id}
+                        className="flex items-center justify-between gap-3 py-3 text-sm"
+                      >
+                        <span className="inline-flex items-center gap-2 capitalize text-zinc-200">
+                          <ProtocolIcon protocol={v.id} size={22} />
+                          {v.id === "hyperliquid"
+                            ? "Hyperliquid"
+                            : "Polymarket"}
+                        </span>
+                        <span className="rounded bg-zinc-800/80 px-2 py-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
+                          Coming soon
+                        </span>
+                      </li>
                     ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+                  </ul>
+                </section>
+
+                <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+                  <SectionHeader
+                    title="DeFi"
+                    total={defiTotal}
+                    hint="Protocol deposits and positions"
+                  />
+                  {filteredDefi.length === 0 ? (
+                    <p className="border-t border-zinc-800/80 py-6 text-sm text-zinc-500">
+                      No DeFi positions.
+                    </p>
+                  ) : (
+                    filteredDefi.map((g) => (
+                      <ProtocolGroupRow
+                        key={g.protocol}
+                        group={g}
+                        showWallet={showWallet}
+                      />
+                    ))
+                  )}
+                </section>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

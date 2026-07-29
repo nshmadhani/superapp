@@ -1,4 +1,4 @@
-export { createDb } from "./client";
+export { createDb, hasSupabaseEnv } from "./client";
 export type { SupabaseClient } from "@supabase/supabase-js";
 export {
   savePlan,

@@ -8,26 +8,14 @@ import { rememberTurnkeyWallets } from "@/lib/turnkey-refresh";
 export const CIPHER_AUTHED_EVENT = "cipher:authed";
 export const CIPHER_LOGOUT_EVENT = "cipher:logout";
 
-const STALE_EXTERNAL_CLEANUP_KEY = "cipher:cleared-stale-externals-v1";
-
-/** One-shot: drop extension/Browser wallets that were auto-imported before. */
+/** Drop auto-imported Browser wallets / EVM case-dupes. Never wipe labeled Connect wallets. */
 async function cleanupStaleExternalWallets() {
   try {
-    if (typeof localStorage === "undefined") return;
-    if (localStorage.getItem(STALE_EXTERNAL_CLEANUP_KEY)) {
-      await fetch("/api/wallets", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "prune_auto" }),
-      });
-      return;
-    }
     await fetch("/api/wallets", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "prune_all_external" }),
+      body: JSON.stringify({ action: "prune_auto" }),
     });
-    localStorage.setItem(STALE_EXTERNAL_CLEANUP_KEY, "1");
   } catch {
     // non-fatal
   }

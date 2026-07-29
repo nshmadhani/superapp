@@ -1,4 +1,9 @@
 import { scheduleZerionCall } from "./rate-limit";
+import {
+  buildPortfolioView,
+  type PortfolioView,
+  type PortfolioWalletRow,
+} from "./view";
 
 export type PortfolioPosition = {
   symbol: string;
@@ -7,6 +12,8 @@ export type PortfolioPosition = {
   valueUsd: number | null;
   chainId: string;
   address: string | null;
+  /** Zerion fungible icon URL when present. */
+  iconUrl?: string | null;
   /** wallet token vs DeFi protocol position (Morpho, Aave, …). */
   kind?: "wallet" | "defi";
   protocol?: string | null;
@@ -22,7 +29,7 @@ export type PortfolioSnapshot = {
 };
 
 /** In-process TTL so dashboard + chat don't re-hit Zerion for the same wallet. */
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 30_000;
 const RETRY_429_DELAYS_MS = [1_500, 3_000, 6_000];
 
 function isZerion429(err: unknown): boolean {
@@ -116,6 +123,7 @@ async function fetchPortfolioUncached(
         fungible_info?: {
           symbol: string;
           name: string;
+          icon?: { url?: string | null } | null;
           implementations?: Array<{
             chain_id: string;
             address: string | null;
@@ -153,6 +161,7 @@ async function fetchPortfolioUncached(
       valueUsd: attrs.value,
       chainId,
       address: impl?.address ?? null,
+      iconUrl: attrs.fungible_info?.icon?.url ?? null,
       kind: isDefi ? "defi" : "wallet",
       protocol: attrs.protocol ?? null,
       positionType: attrs.position_type ?? null,
@@ -203,31 +212,49 @@ export async function fetchPortfolio(
   return job;
 }
 
-export type AggregatedPortfolio = {
-  totalValueUsd: number;
-  asOf: string;
-  wallets: Array<{
+/** @deprecated Use PortfolioView — kept as alias for wallet-row typing. */
+export type AggregatedPortfolio = PortfolioView;
+
+/**
+ * Shape a single-wallet Zerion snapshot into the dashboard/agent PortfolioView.
+ */
+export function portfolioSnapshotToView(
+  snap: PortfolioSnapshot,
+  wallet?: {
     walletId: string;
-    address: string;
     label?: string;
     chainFamily: "evm" | "solana";
     source: string;
-    totalValueUsd: number;
-    positions: PortfolioPosition[];
-    error?: string;
-  }>;
-  positions: Array<
-    PortfolioPosition & {
-      walletId: string;
-      walletLabel?: string;
-      walletAddress: string;
-    }
-  >;
-};
+  },
+): PortfolioView {
+  const walletRows: PortfolioWalletRow[] = wallet
+    ? [
+        {
+          walletId: wallet.walletId,
+          address: snap.address,
+          label: wallet.label,
+          chainFamily: wallet.chainFamily,
+          source: wallet.source,
+          totalValueUsd: snap.totalValueUsd,
+          positions: snap.positions,
+        },
+      ]
+    : [];
+  return buildPortfolioView({
+    legs: snap.positions.map((p) => ({
+      ...p,
+      walletId: wallet?.walletId,
+      walletLabel: wallet?.label,
+      walletAddress: snap.address,
+    })),
+    wallets: walletRows,
+    asOf: snap.asOf,
+  });
+}
 
 /**
- * Aggregate many wallets. Upstream calls still go through the shared
- * 1/sec queue — do not fan out raw HTTP in parallel.
+ * Aggregate many wallets into a shaped PortfolioView.
+ * Upstream calls still go through the shared 1/sec queue — do not fan out raw HTTP in parallel.
  */
 export async function fetchAggregatedPortfolio(
   wallets: Array<{
@@ -237,7 +264,7 @@ export async function fetchAggregatedPortfolio(
     source: string;
     label?: string;
   }>,
-): Promise<AggregatedPortfolio> {
+): Promise<PortfolioView> {
   const results: Array<{
     wallet: (typeof wallets)[number];
     snap: PortfolioSnapshot | null;
@@ -258,8 +285,14 @@ export async function fetchAggregatedPortfolio(
     }
   }
 
-  const positions: AggregatedPortfolio["positions"] = [];
-  const walletRows: AggregatedPortfolio["wallets"] = [];
+  const legs: Array<
+    PortfolioPosition & {
+      walletId: string;
+      walletLabel?: string;
+      walletAddress: string;
+    }
+  > = [];
+  const walletRows: PortfolioWalletRow[] = [];
 
   for (const r of results) {
     const total = r.snap?.totalValueUsd ?? 0;
@@ -274,7 +307,7 @@ export async function fetchAggregatedPortfolio(
       error: r.error,
     });
     for (const p of r.snap?.positions ?? []) {
-      positions.push({
+      legs.push({
         ...p,
         walletId: r.wallet.id,
         walletLabel: r.wallet.label,
@@ -283,12 +316,9 @@ export async function fetchAggregatedPortfolio(
     }
   }
 
-  positions.sort((a, b) => (b.valueUsd ?? 0) - (a.valueUsd ?? 0));
-
-  return {
-    totalValueUsd: walletRows.reduce((s, w) => s + w.totalValueUsd, 0),
-    asOf: new Date().toISOString(),
+  return buildPortfolioView({
+    legs,
     wallets: walletRows,
-    positions,
-  };
+    asOf: new Date().toISOString(),
+  });
 }

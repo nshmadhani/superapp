@@ -54,6 +54,33 @@ describe("fetchPortfolio", () => {
     expect(calledUrl).toContain("filter%5Bpositions%5D=no_filter");
   });
 
+  it("maps fungible icon URL when present", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              attributes: {
+                quantity: { float: 1 },
+                value: 10,
+                fungible_info: {
+                  symbol: "USDC",
+                  name: "USD Coin",
+                  icon: { url: "https://cdn.zerion.io/usdc.png" },
+                  implementations: [{ chain_id: "base", address: "0x8335" }],
+                },
+              },
+            },
+          ],
+        }),
+      }),
+    );
+    const snap = await fetchPortfolio(EVM_ADDR, "test-key");
+    expect(snap.positions[0]?.iconUrl).toBe("https://cdn.zerion.io/usdc.png");
+  });
+
   it("omits no_filter for Solana addresses", async () => {
     vi.stubGlobal(
       "fetch",
@@ -154,5 +181,8 @@ describe("fetchPortfolio", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(agg.wallets).toHaveLength(2);
+    expect(agg.tokens.length).toBeGreaterThan(0);
+    expect(agg.positions.venues).toHaveLength(2);
+    expect(agg.defi).toEqual([]);
   });
 });

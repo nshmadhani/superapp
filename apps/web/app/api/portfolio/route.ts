@@ -1,6 +1,13 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
 import { store } from "@cipher/agent";
-import { fetchAggregatedPortfolio, fetchPortfolio } from "@cipher/zerion";
+import {
+  cachedPortfolioView,
+  fetchAggregatedPortfolio,
+  fetchPortfolio,
+  portfolioApiCacheKey,
+  portfolioSnapshotToView,
+  type PortfolioView,
+} from "@cipher/zerion";
 
 function addressesMatch(a: string, b: string): boolean {
   if (a.startsWith("0x") || b.startsWith("0x")) {
@@ -8,6 +15,25 @@ function addressesMatch(a: string, b: string): boolean {
   }
   return a === b;
 }
+
+const EMPTY_VIEW: PortfolioView = {
+  totalValueUsd: 0,
+  tokensValueUsd: 0,
+  defiValueUsd: 0,
+  positionsValueUsd: 0,
+  asOf: new Date().toISOString(),
+  tokens: [],
+  positions: {
+    venues: [
+      { id: "hyperliquid", status: "coming_soon" },
+      { id: "polymarket", status: "coming_soon" },
+    ],
+    positions: [],
+    valueUsd: 0,
+  },
+  defi: [],
+  wallets: [],
+};
 
 export async function GET(req: Request) {
   try {
@@ -21,14 +47,16 @@ export async function GET(req: Request) {
     if (scope === "all" || (!address && scope !== "wallet")) {
       if (wallets.length === 0) {
         return Response.json({
-          totalValueUsd: 0,
+          ...EMPTY_VIEW,
           asOf: new Date().toISOString(),
-          wallets: [],
-          positions: [],
-        });
+        } satisfies PortfolioView);
       }
-      const aggregated = await fetchAggregatedPortfolio(wallets);
-      return Response.json(aggregated);
+
+      const view = await cachedPortfolioView(
+        portfolioApiCacheKey(userId, "all"),
+        () => fetchAggregatedPortfolio(wallets),
+      );
+      return Response.json(view);
     }
 
     if (!address) {
@@ -40,9 +68,22 @@ export async function GET(req: Request) {
       return Response.json({ error: "address_not_owned" }, { status: 403 });
     }
 
-    const snapshot = await fetchPortfolio(owned.address);
+    const view = await cachedPortfolioView(
+      portfolioApiCacheKey(userId, owned.address),
+      async () => {
+        const snapshot = await fetchPortfolio(owned.address);
+        return portfolioSnapshotToView(snapshot, {
+          walletId: owned.id,
+          label: owned.label,
+          chainFamily: owned.chainFamily,
+          source: owned.source,
+        });
+      },
+    );
+
     return Response.json({
-      ...snapshot,
+      ...view,
+      address: owned.address,
       walletId: owned.id,
       label: owned.label,
       chainFamily: owned.chainFamily,
