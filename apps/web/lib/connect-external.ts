@@ -14,6 +14,8 @@ type Eip1193 = {
     event: string,
     handler: (...args: unknown[]) => void,
   ) => void;
+  isMetaMask?: boolean;
+  providers?: Eip1193[];
 };
 
 type SolanaProvider = {
@@ -30,12 +32,15 @@ type SolanaProvider = {
   ) => void;
 };
 
-declare global {
-  interface Window {
-    ethereum?: Eip1193 & { isMetaMask?: boolean; providers?: Eip1193[] };
-    solana?: SolanaProvider;
-    phantom?: { solana?: SolanaProvider };
-  }
+type InjectedWindow = Window & {
+  ethereum?: Eip1193;
+  solana?: SolanaProvider;
+  phantom?: { solana?: SolanaProvider };
+};
+
+function injectedWindow(): InjectedWindow | null {
+  if (typeof window === "undefined") return null;
+  return window as InjectedWindow;
 }
 
 export type ExternalProviderOption = {
@@ -46,8 +51,8 @@ export type ExternalProviderOption = {
 };
 
 function getEvmProvider(): Eip1193 | null {
-  if (typeof window === "undefined") return null;
-  const eth = window.ethereum;
+  const win = injectedWindow();
+  const eth = win?.ethereum;
   if (!eth) return null;
   if (Array.isArray(eth.providers) && eth.providers.length > 0) {
     return eth.providers[0] ?? eth;
@@ -56,17 +61,19 @@ function getEvmProvider(): Eip1193 | null {
 }
 
 function getSolanaProvider(): SolanaProvider | null {
-  if (typeof window === "undefined") return null;
-  return window.phantom?.solana ?? window.solana ?? null;
+  const win = injectedWindow();
+  if (!win) return null;
+  return win.phantom?.solana ?? win.solana ?? null;
 }
 
 export function listExternalProviderOptions(): ExternalProviderOption[] {
+  const win = injectedWindow();
   const evm = getEvmProvider();
   const sol = getSolanaProvider();
   return [
     {
       id: "injected-evm",
-      label: window.ethereum?.isMetaMask ? "MetaMask" : "Browser EVM wallet",
+      label: win?.ethereum?.isMetaMask ? "MetaMask" : "Browser EVM wallet",
       chainFamily: "evm",
       available: Boolean(evm),
     },
@@ -114,7 +121,9 @@ export async function connectInjectedEvm(): Promise<ConnectedExternal> {
   const entry: ConnectedExternal = {
     address: address.toLowerCase(),
     chainFamily: "evm",
-    label: window.ethereum?.isMetaMask ? "MetaMask" : "Browser wallet",
+    label: injectedWindow()?.ethereum?.isMetaMask
+      ? "MetaMask"
+      : "Browser wallet",
     providerId: "injected-evm",
   };
   setConnectedExternal(entry);
@@ -161,7 +170,9 @@ export async function refreshLiveExternalConnections() {
         setConnectedExternal({
           address: address.toLowerCase(),
           chainFamily: "evm",
-          label: window.ethereum?.isMetaMask ? "MetaMask" : "Browser wallet",
+          label: injectedWindow()?.ethereum?.isMetaMask
+            ? "MetaMask"
+            : "Browser wallet",
           providerId: "injected-evm",
         });
       }
