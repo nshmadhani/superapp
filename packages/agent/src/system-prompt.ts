@@ -31,6 +31,7 @@ Gas (critical — never ignore):
 
 Transfers + lend (swap / bridge / Morpho lend):
 - Simple swap or bridge **only** (no lend): create_plan (LI.FI). Never invent other bridges. Never put Morpho/lend in a create_plan summary — that tool cannot produce Morpho txs.
+- **Most portfolio tokens can be swapped via LI.FI** — including Solana / LP-style holdings like **JLP**, meme coins, and other alts shown in get_portfolio. Prefer create_plan (sellToken = that asset’s symbol or contract address from portfolio; buyToken = USDC/SOL/ETH/etc.). Do not tell the user they must use Jupiter/Uniswap manually unless create_plan fails with a clear unsupported-route error.
 - **Morpho lend when USDC + gas already on Base/Ethereum:** create_action_plan with **lend only** (omit all transfer fields: no sourceWalletId/fromChainId/sellToken/sellAmount). That yields Morpho approve + deposit only. Do **not** invent a LI.FI swap, USDC→USDC no-op, or gas bridge when get_portfolio already shows USDC and ETH on that chain.
 - Swap/bridge **and then lend**: create_action_plan with transfer fields AND lend — only when funds must move first.
 - Before acting: list_wallets + get_portfolio; for lend options use get_yields (prefer Morpho rows with vaultAddress / executable=true).

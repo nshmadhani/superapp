@@ -3,6 +3,9 @@
 import { isLifiEvmChain, isLifiSolanaChain } from "@cipher/core";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
 import {
+  decodeFunctionData,
+  encodeFunctionData,
+  erc20Abi,
   getAddress,
   serializeTransaction,
   type Hex,
@@ -256,7 +259,7 @@ export async function waitForEvmReceipt(opts: {
   pollMs?: number;
 }): Promise<{ status: "success" | "reverted"; blockNumber?: string }> {
   const timeoutMs = opts.timeoutMs ?? 120_000;
-  const pollMs = opts.pollMs ?? 1_500;
+  const pollMs = opts.pollMs ?? 1_200;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const receipt = (await evmRpc(opts.chainId, "eth_getTransactionReceipt", [
@@ -275,6 +278,71 @@ export async function waitForEvmReceipt(opts: {
   }
   throw new Error(
     `Timed out waiting for confirmation of ${opts.txHash.slice(0, 10)}…`,
+  );
+}
+
+/** Parse ERC-20 approve(spender, amount) calldata from an approve leg. */
+export function parseErc20ApproveCall(unsignedTx: {
+  to?: string;
+  data?: string;
+}): { token: `0x${string}`; spender: `0x${string}`; amount: bigint } | null {
+  if (!unsignedTx.to?.startsWith("0x") || !unsignedTx.data?.startsWith("0x")) {
+    return null;
+  }
+  try {
+    const decoded = decodeFunctionData({
+      abi: erc20Abi,
+      data: unsignedTx.data as Hex,
+    });
+    if (decoded.functionName !== "approve") return null;
+    const [spender, amount] = decoded.args as [`0x${string}`, bigint];
+    return {
+      token: getAddress(unsignedTx.to) as `0x${string}`,
+      spender: getAddress(spender) as `0x${string}`,
+      amount,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Receipt alone is not enough across load-balanced RPCs — poll allowance
+ * until the approve is visible before Morpho deposit estimateGas.
+ */
+export async function waitForErc20Allowance(opts: {
+  chainId: number;
+  token: string;
+  owner: string;
+  spender: string;
+  minAmount: bigint;
+  timeoutMs?: number;
+  pollMs?: number;
+}): Promise<bigint> {
+  const timeoutMs = opts.timeoutMs ?? 90_000;
+  const pollMs = opts.pollMs ?? 1_000;
+  const started = Date.now();
+  const owner = getAddress(opts.owner);
+  const spender = getAddress(opts.spender);
+  const token = getAddress(opts.token);
+  const data = encodeFunctionData({
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [owner, spender],
+  });
+
+  while (Date.now() - started < timeoutMs) {
+    const result = (await evmRpc(opts.chainId, "eth_call", [
+      { to: token, data },
+      "latest",
+    ])) as string;
+    const allowance = BigInt(result || "0x0");
+    if (allowance >= opts.minAmount) return allowance;
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  throw new Error(
+    `Timed out waiting for ERC-20 allowance ≥ ${opts.minAmount.toString()} ` +
+      `(token ${token.slice(0, 10)}… spender ${spender.slice(0, 10)}…)`,
   );
 }
 

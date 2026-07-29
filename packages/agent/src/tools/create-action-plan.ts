@@ -9,9 +9,28 @@ import {
   type PlanStepExecution,
   type PlanUnsignedTx,
 } from "@cipher/core";
+import { resolveEvmRpcUrl } from "@cipher/rpc";
+import { createPublicClient, erc20Abi, http, type Hex } from "viem";
 import { store } from "../store";
 import { isAddressSignable, toSignableSet } from "../signable";
 import type { AgentContext } from "./index";
+
+async function readErc20Allowance(opts: {
+  chainId: number;
+  token: Hex;
+  owner: Hex;
+  spender: Hex;
+}): Promise<bigint> {
+  const client = createPublicClient({
+    transport: http(resolveEvmRpcUrl(opts.chainId)),
+  });
+  return client.readContract({
+    address: opts.token,
+    abi: erc20Abi,
+    functionName: "allowance",
+    args: [opts.owner, opts.spender],
+  });
+}
 
 /**
  * Multi-leg action plan: optional LI.FI transfer + optional Morpho lend.
@@ -345,27 +364,42 @@ export function createActionPlanTool(ctx: AgentContext) {
           });
           lendSummary = morpho.displayRoute;
 
-          const approveIndex = steps.length;
-          steps.push({
-            type: "approve",
-            walletId: lendWallet.id,
-            chainId: lendChainId,
-            token: morpho.vault.assetAddress,
-            spender: morpho.vault.address,
-            amount: lendAmount,
-            adapterId: "morpho",
-            label: `Approve ${morpho.vault.assetSymbol} for Morpho`,
-          });
-          stepExecutions.push({
-            stepIndex: approveIndex,
-            walletId: lendWallet.id,
-            kind: "approve",
-            label: `Approve ${morpho.vault.assetSymbol} for ${morpho.vault.name}`,
-            unsignedTx: {
-              ...morpho.approveTx,
-              displayRoute: `Approve ${morpho.vault.assetSymbol}`,
-            },
-          });
+          let needsApprove = true;
+          try {
+            const allowance = await readErc20Allowance({
+              chainId: lendChainId,
+              token: morpho.vault.assetAddress,
+              owner: lendWallet.address as Hex,
+              spender: morpho.vault.address,
+            });
+            needsApprove = allowance < BigInt(lendAmount);
+          } catch {
+            needsApprove = true;
+          }
+
+          if (needsApprove) {
+            const approveIndex = steps.length;
+            steps.push({
+              type: "approve",
+              walletId: lendWallet.id,
+              chainId: lendChainId,
+              token: morpho.vault.assetAddress,
+              spender: morpho.vault.address,
+              amount: lendAmount,
+              adapterId: "morpho",
+              label: `Approve ${morpho.vault.assetSymbol} for Morpho`,
+            });
+            stepExecutions.push({
+              stepIndex: approveIndex,
+              walletId: lendWallet.id,
+              kind: "approve",
+              label: `Approve ${morpho.vault.assetSymbol} for ${morpho.vault.name}`,
+              unsignedTx: {
+                ...morpho.approveTx,
+                displayRoute: `Approve ${morpho.vault.assetSymbol}`,
+              },
+            });
+          }
 
           const lendIndex = steps.length;
           steps.push({

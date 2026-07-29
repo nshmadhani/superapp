@@ -10,7 +10,9 @@ import { ExternalLink, Loader2, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   executeLifiAfterConfirm,
+  parseErc20ApproveCall,
   resolveSignAccount,
+  waitForErc20Allowance,
   waitForEvmReceipt,
 } from "@/lib/lifi-execute";
 import { encodeTransferSubmitted } from "@/lib/transfer-submitted";
@@ -658,9 +660,9 @@ export function TxReviewCard({
             result.txHash &&
             isLifiEvmChain(leg.unsignedTx.chainId)
           ) {
-            // Default for every non-bridge EVM leg (approve, lend, same-chain
-            // swap): wait until the tx is mined — not a LI.FI status poll.
+            // Default for every non-bridge EVM leg: wait until mined.
             const isLast = i === confirmedLegs.length - 1;
+            const next = confirmedLegs[i + 1];
             setStepNotes((prev) => [
               ...prev,
               isLast
@@ -671,6 +673,30 @@ export function TxReviewCard({
               chainId: leg.unsignedTx.chainId,
               txHash: result.txHash,
             });
+
+            // Morpho approve → deposit: receipt can land before allowance is
+            // readable on a sibling RPC. Poll allowance before deposit.
+            if (
+              leg.kind === "approve" &&
+              next?.kind === "lend" &&
+              !isLast
+            ) {
+              const parsed = parseErc20ApproveCall(leg.unsignedTx);
+              if (parsed) {
+                setStepNotes((prev) => [
+                  ...prev,
+                  "Waiting for token allowance…",
+                ]);
+                await waitForErc20Allowance({
+                  chainId: leg.unsignedTx.chainId,
+                  token: parsed.token,
+                  owner: walletAddress,
+                  spender: parsed.spender,
+                  minAmount: parsed.amount,
+                });
+              }
+            }
+
             setStepNotes((prev) => [
               ...prev,
               isLast
