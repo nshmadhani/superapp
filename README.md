@@ -10,6 +10,10 @@ AI crypto co-pilot — research and act through tools (no hardcoded flows).
 - Zerion, DeFiLlama, Tavily, LI.FI, Turnkey
 - Supabase (hosted) for plans/wallets + SSR auth helpers (memory fallback when service role unset)
 
+##  
+
+
+
 ## Setup
 
 ```bash
@@ -39,8 +43,11 @@ pnpm --filter @cipher/web build
 pnpm --filter @cipher/web dev
 ```
 
+
+
 ## Docs
 
 - Design: `docs/superpowers/specs/2026-07-25-ai-crypto-wallet-design.md`
 - Phase 1 plan: `docs/superpowers/plans/2026-07-25-cipher-phase1.md`
 - Open items: `TODO.md`
+
