@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { resolveEvmRpcUrl, supportedEvmChainIds } from "@cipher/rpc";
+import { resolveEvmRpcUrl, supportedEvmChainIds } from "@ervo/rpc";
 
 type RpcBody = {
   chainId?: number;

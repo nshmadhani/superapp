@@ -19,7 +19,7 @@ describe("quoteLifiTransfer", () => {
     vi.mocked(getQuote).mockReset();
   });
 
-  it("maps a LiFi quote into Cipher review fields", async () => {
+  it("maps a LiFi quote into Ervo review fields", async () => {
     vi.mocked(getQuote).mockResolvedValue({
       id: "step-1",
       type: "lifi",

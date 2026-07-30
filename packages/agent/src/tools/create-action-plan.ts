@@ -1,15 +1,15 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { quoteLifiTransfer, quoteMorphoLend } from "@cipher/adapters";
+import { quoteLifiTransfer, quoteMorphoLend } from "@ervo/adapters";
 import {
   chainFamilyForLifiChain,
   type Plan,
   type PlanStep,
   type PlanStepExecution,
   type PlanUnsignedTx,
-} from "@cipher/core";
-import { resolveEvmRpcUrl } from "@cipher/rpc";
+} from "@ervo/core";
+import { resolveEvmRpcUrl } from "@ervo/rpc";
 import { createPublicClient, erc20Abi, http, type Hex } from "viem";
 import { store } from "../store";
 import { isAddressSignable, toSignableSet } from "../signable";

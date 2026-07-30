@@ -6,14 +6,14 @@ import {
   startAgentRun,
   toPublicAgentRun,
   type AgentWallet,
-} from "@cipher/agent-jobs";
+} from "@ervo/agent-jobs";
 import {
   backfillOrphanAgentRuns,
   ensureAgentRuntime,
   listHydratedAgentRuns,
   resumeOpenAgentRuns,
-} from "@cipher/agent";
-import { createDb, listActiveAgentRuns, saveAgentWallet } from "@cipher/db";
+} from "@ervo/agent";
+import { createDb, listActiveAgentRuns, saveAgentWallet } from "@ervo/db";
 
 function parseWallet(raw: unknown): AgentWallet | null {
   if (!raw || typeof raw !== "object") return null;
@@ -27,7 +27,7 @@ function parseWallet(raw: unknown): AgentWallet | null {
     chainFamily: w.chainFamily === "solana" ? "solana" : "evm",
     label,
     source: "ephemeral",
-    cipherWalletId: w.cipherWalletId ? String(w.cipherWalletId) : undefined,
+    ervoWalletId: w.ervoWalletId ? String(w.ervoWalletId) : undefined,
     turnkeyWalletId: w.turnkeyWalletId ? String(w.turnkeyWalletId) : undefined,
   };
 }

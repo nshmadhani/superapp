@@ -1,7 +1,7 @@
 import {
   cleanWalletName,
   walletDisplayName as coreDisplayName,
-} from "@cipher/core";
+} from "@ervo/core";
 
 export { cleanWalletName };
 

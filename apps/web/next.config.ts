@@ -3,16 +3,16 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   transpilePackages: [
-    "@cipher/agent",
-    "@cipher/agent-jobs",
-    "@cipher/core",
-    "@cipher/db",
-    "@cipher/zerion",
-    "@cipher/search",
-    "@cipher/defillama",
-    "@cipher/adapters",
-    "@cipher/turnkey",
-    "@cipher/rpc",
+    "@ervo/agent",
+    "@ervo/agent-jobs",
+    "@ervo/core",
+    "@ervo/db",
+    "@ervo/zerion",
+    "@ervo/search",
+    "@ervo/defillama",
+    "@ervo/adapters",
+    "@ervo/turnkey",
+    "@ervo/rpc",
   ],
   serverExternalPackages: ["@turnkey/sdk-server", "@e2b/code-interpreter", "viem"],
 };

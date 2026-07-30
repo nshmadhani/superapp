@@ -1,8 +1,8 @@
 export { createTurnkeyClient } from "./client";
 export {
   createEvmWallet,
-  createCipherWallet,
+  createErvoWallet,
   type CreatedEvmWallet,
-  type CreatedCipherWallet,
-  type CreateCipherWalletOpts,
+  type CreatedErvoWallet,
+  type CreateErvoWalletOpts,
 } from "./wallets";

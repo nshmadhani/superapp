@@ -1,4 +1,4 @@
--- Cipher schema (single combined migration)
+-- Ervo schema (single combined migration)
 -- Source: former 20260725100000…20260727170000 migrations
 
 create extension if not exists "pgcrypto";

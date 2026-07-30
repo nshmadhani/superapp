@@ -1,4 +1,4 @@
-import { store } from "@cipher/agent";
+import { store } from "@ervo/agent";
 import { AuthError, requireAuthUserId } from "@/lib/auth";
 import {
   chainFamilyForAddress,
@@ -59,8 +59,8 @@ export async function POST(req: Request) {
     }
 
     if (body.action === "create_turnkey") {
-      const { createCipherWallet } = await import("@cipher/turnkey");
-      const created = await createCipherWallet("Ervo");
+      const { createErvoWallet } = await import("@ervo/turnkey");
+      const created = await createErvoWallet("Ervo");
       const wallets = [];
       for (const account of created.accounts) {
         wallets.push(

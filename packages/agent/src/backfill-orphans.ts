@@ -1,10 +1,10 @@
-import type { SupabaseClient } from "@cipher/db";
+import type { SupabaseClient } from "@ervo/db";
 import {
   agentRunStore,
   kickAgentRun,
   type AgentRun,
-} from "@cipher/agent-jobs";
-import { upsertAgentRun, type PersistedAgentRun } from "@cipher/db";
+} from "@ervo/agent-jobs";
+import { upsertAgentRun, type PersistedAgentRun } from "@ervo/db";
 import { ensureAgentRuntime, toPersisted } from "./register-runtime";
 
 type WalletOrphan = {

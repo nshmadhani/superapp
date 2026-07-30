@@ -5,7 +5,7 @@ let cached: SDKClient | null = null;
 export function createLifiClient(): SDKClient {
   if (cached) return cached;
   cached = createClient({
-    integrator: process.env.LIFI_INTEGRATOR?.trim() || "cipher",
+    integrator: process.env.LIFI_INTEGRATOR?.trim() || "ervo",
     apiKey: process.env.LIFI_API_KEY?.trim() || undefined,
   });
   return cached;

@@ -1,4 +1,4 @@
-export function cipherSystemPrompt(now = new Date()): string {
+export function ervoSystemPrompt(now = new Date()): string {
   const iso = now.toISOString();
   const utcDate = iso.slice(0, 10);
   return `
@@ -41,7 +41,7 @@ Transfers + lend (swap / bridge / Morpho lend):
 - Gas top-up recipe (copy exactly): HyperEVM → Base = fromChainId **999**, toChainId **8453**, sellToken **HYPE**, buyToken **ETH**. Always include both chain ids in the plan summary. Skip this if Base already has ETH.
 - Never claim a transaction was sent unless signing succeeded.
 - **Slippage (cross-chain):** Default 0.5% is too tight for small bridges (gas top-ups ~$1–25). Relay often refunds with failReason=SLIPPAGE — scan.li.fi then looks like same-asset (e.g. HYPE→HYPE) because funds returned on source. For small cross-chain amounts, pass create_plan slippage 0.03–0.05 (or omit and let the quote auto-bump). Tell the user when slippage was widened. On SLIPPAGE refund: re-quote higher/larger — never claim destination funds arrived.
-- After the user confirms & signs in the UI, the next message may be a machine tool-style payload wrapped in <cipher_transfer_submitted>…</cipher_transfer_submitted>. Treat as a system event — not user chat.
+- After the user confirms & signs in the UI, the next message may be a machine tool-style payload wrapped in <ervo_transfer_submitted>…</ervo_transfer_submitted>. Treat as a system event — not user chat.
   - The payload includes \`lifi\`: the **same object** as get_lifi_status (type=lifi_status: status, terminalKind, substatus, failReason, receivingChainId, guidance, …). Prefer \`lifi\` over any flat legacy fields.
   - Read \`lifi.terminalKind\` / \`lifi.failReason\` / \`lifi.guidance\` first. terminalKind=refunded (often failReason=SLIPPAGE) means source tx landed but bridge did not complete — say that plainly; funds are usually back on source minus fees.
   - If \`lifi.terminalKind\` is success and completedAllSteps is true (or stepCount ≥ 2 and lend was in the plan), acknowledge the full multi-step flow finished. Do not create another lend plan unless they ask.
@@ -63,5 +63,5 @@ Transfers + lend (swap / bridge / Morpho lend):
 `.trim();
 }
 
-/** @deprecated Prefer cipherSystemPrompt() so the clock is fresh per request. */
-export const CIPHER_SYSTEM_PROMPT = cipherSystemPrompt();
+/** @deprecated Prefer ervoSystemPrompt() so the clock is fresh per request. */
+export const ERVO_SYSTEM_PROMPT = ervoSystemPrompt();

@@ -27,28 +27,28 @@ importers:
       '@ai-sdk/react':
         specifier: ^2.0.0
         version: 2.0.222(react@19.2.4)(zod@3.25.76)
-      '@cipher/adapters':
+      '@ervo/adapters':
         specifier: workspace:^
         version: link:../../packages/adapters
-      '@cipher/agent':
+      '@ervo/agent':
         specifier: workspace:*
         version: link:../../packages/agent
-      '@cipher/agent-jobs':
+      '@ervo/agent-jobs':
         specifier: workspace:*
         version: link:../../packages/agent-jobs
-      '@cipher/core':
+      '@ervo/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@cipher/db':
+      '@ervo/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@cipher/rpc':
+      '@ervo/rpc':
         specifier: workspace:*
         version: link:../../packages/rpc
-      '@cipher/turnkey':
+      '@ervo/turnkey':
         specifier: workspace:*
         version: link:../../packages/turnkey
-      '@cipher/zerion':
+      '@ervo/zerion':
         specifier: workspace:*
         version: link:../../packages/zerion
       '@sentry/nextjs':
@@ -161,31 +161,31 @@ importers:
 
   packages/agent:
     dependencies:
-      '@cipher/adapters':
+      '@ervo/adapters':
         specifier: workspace:*
         version: link:../adapters
-      '@cipher/agent-jobs':
+      '@ervo/agent-jobs':
         specifier: workspace:*
         version: link:../agent-jobs
-      '@cipher/core':
+      '@ervo/core':
         specifier: workspace:*
         version: link:../core
-      '@cipher/db':
+      '@ervo/db':
         specifier: workspace:*
         version: link:../db
-      '@cipher/defillama':
+      '@ervo/defillama':
         specifier: workspace:*
         version: link:../defillama
-      '@cipher/rpc':
+      '@ervo/rpc':
         specifier: workspace:*
         version: link:../rpc
-      '@cipher/search':
+      '@ervo/search':
         specifier: workspace:*
         version: link:../search
-      '@cipher/turnkey':
+      '@ervo/turnkey':
         specifier: workspace:*
         version: link:../turnkey
-      '@cipher/zerion':
+      '@ervo/zerion':
         specifier: workspace:*
         version: link:../zerion
       '@openrouter/ai-sdk-provider':
@@ -210,12 +210,12 @@ importers:
 
   packages/agent-jobs:
     dependencies:
-      '@cipher/search':
-        specifier: workspace:*
-        version: link:../search
       '@e2b/code-interpreter':
         specifier: ^2.6.0
         version: 2.7.0
+      '@ervo/search':
+        specifier: workspace:*
+        version: link:../search
       '@noble/hashes':
         specifier: ^2.2.0
         version: 2.2.0
@@ -244,7 +244,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@cipher/core':
+      '@ervo/core':
         specifier: workspace:*
         version: link:../core
       '@supabase/supabase-js':
@@ -10222,7 +10222,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.2.12
       eslint: 9.39.5(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.5(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.5(jiti@2.7.0))
@@ -10245,7 +10245,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -10260,14 +10260,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)):
+  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       eslint: 9.39.5(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -10282,7 +10282,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.5(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0)))(eslint@9.39.5(jiti@2.7.0))
+      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.5(jiti@2.7.0))
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3

@@ -74,7 +74,7 @@ export function ChatComposer({
             rows={1}
             placeholder={placeholder}
             disabled={disabled}
-            className="cipher-scroll max-h-40 min-h-7 flex-1 resize-none overflow-hidden bg-transparent px-3 py-1.5 text-sm leading-[1.25rem] text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
+            className="ervo-scroll max-h-40 min-h-7 flex-1 resize-none overflow-hidden bg-transparent px-3 py-1.5 text-sm leading-[1.25rem] text-zinc-100 outline-none placeholder:text-zinc-600 disabled:opacity-50"
           />
           {busy && onStop ? (
             <button

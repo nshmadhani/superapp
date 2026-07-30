@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { memoryStore } from "../memory-store";
-import type { Plan } from "@cipher/core";
-import { hashPlan } from "@cipher/core";
+import type { Plan } from "@ervo/core";
+import { hashPlan } from "@ervo/core";
 
 function samplePlan(walletId: string): Plan {
   return {

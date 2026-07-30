@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hashPlan, type Plan } from "@cipher/core";
+import { hashPlan, type Plan } from "@ervo/core";
 
 describe("plan persistence contract", () => {
   it("hashPlan matches what savePlan would store", () => {

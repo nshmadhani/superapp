@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { hashPlan, type Plan, type PlanUnsignedTx } from "@cipher/core";
+import { hashPlan, type Plan, type PlanUnsignedTx } from "@ervo/core";
 
 export async function savePlan(
   db: SupabaseClient,

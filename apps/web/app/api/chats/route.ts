@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { createDb } from "@cipher/db";
+import { createDb } from "@ervo/db";
 
 export async function GET() {
   try {

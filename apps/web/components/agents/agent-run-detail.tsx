@@ -15,7 +15,7 @@ import type {
   DaoArtifact,
   GeneralArtifact,
   TaArtifact,
-} from "@cipher/agent-jobs/types";
+} from "@ervo/agent-jobs/types";
 import { PriceChart } from "./price-chart";
 
 function statusTone(status: string) {
@@ -234,7 +234,7 @@ export function AgentRunDetail({ runId }: { runId: string }) {
   );
 
   return (
-    <div className="cipher-scroll h-full overflow-y-auto">
+    <div className="ervo-scroll h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-5 px-4 py-8">
         <Link
           href="/app/agents"

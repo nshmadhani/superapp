@@ -3,11 +3,11 @@
 import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
 import { ChevronDown, LogOut, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { CIPHER_AUTHED_EVENT } from "./auth-sync";
-import { waitForCipherSession } from "@/lib/cipher-session";
+import { ERVO_AUTHED_EVENT } from "./auth-sync";
+import { waitForErvoSession } from "@/lib/ervo-session";
 import { WalletModal } from "./wallet-modal";
 
-type CipherUser = {
+type ErvoUser = {
   id: string;
   email: string | null;
 };
@@ -19,7 +19,7 @@ function shortAddr(addr: string) {
 export function TopBar() {
   const { authState, handleLogin, logout, user, session, wallets } =
     useTurnkey();
-  const [cipherUser, setCipherUser] = useState<CipherUser | null>(null);
+  const [ervoUser, setErvoUser] = useState<ErvoUser | null>(null);
   const [walletOpen, setWalletOpen] = useState(false);
   const loggedIn = authState === AuthState.Authenticated && !!session;
 
@@ -32,20 +32,20 @@ export function TopBar() {
   async function refreshMe() {
     const res = await fetch("/api/auth/me");
     const d = await res.json();
-    setCipherUser(d.user ?? null);
+    setErvoUser(d.user ?? null);
   }
 
   useEffect(() => {
     if (!loggedIn) {
-      setCipherUser(null);
+      setErvoUser(null);
       return;
     }
-    void waitForCipherSession().then((ok) => {
+    void waitForErvoSession().then((ok) => {
       if (ok) void refreshMe();
     });
     const onAuthed = () => void refreshMe();
-    window.addEventListener(CIPHER_AUTHED_EVENT, onAuthed);
-    return () => window.removeEventListener(CIPHER_AUTHED_EVENT, onAuthed);
+    window.addEventListener(ERVO_AUTHED_EVENT, onAuthed);
+    return () => window.removeEventListener(ERVO_AUTHED_EVENT, onAuthed);
   }, [loggedIn, user?.userId]);
 
   async function onLogout() {
@@ -55,7 +55,7 @@ export function TopBar() {
       /* ignore */
     }
     await fetch("/api/auth/logout", { method: "POST" });
-    setCipherUser(null);
+    setErvoUser(null);
     window.location.href = "/";
   }
 
@@ -85,7 +85,7 @@ export function TopBar() {
             </button>
             <div className="ml-1 flex items-center gap-2 border-l border-zinc-800 pl-3">
               <span className="max-w-[140px] truncate text-xs text-zinc-500">
-                {cipherUser?.email || user?.userEmail || "Account"}
+                {ervoUser?.email || user?.userEmail || "Account"}
               </span>
               <button
                 type="button"

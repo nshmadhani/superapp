@@ -3,8 +3,8 @@
 import {
   buildAgentLifiStatus,
   type AgentLifiStatus,
-} from "@cipher/adapters";
-import { isLifiEvmChain, isLifiSolanaChain, type PlanStepExecution } from "@cipher/core";
+} from "@ervo/adapters";
+import { isLifiEvmChain, isLifiSolanaChain, type PlanStepExecution } from "@ervo/core";
 import { useTurnkey } from "@turnkey/react-wallet-kit";
 import { ExternalLink, Loader2, Wallet } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";

@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { destroyAgentRun, ensureAgentRuntime } from "@cipher/agent";
+import { destroyAgentRun, ensureAgentRuntime } from "@ervo/agent";
 
 type Ctx = { params: Promise<{ runId: string }> };
 

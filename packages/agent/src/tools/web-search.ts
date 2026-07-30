@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { webSearch } from "@cipher/search";
+import { webSearch } from "@ervo/search";
 
 export function webSearchTool() {
   return tool({

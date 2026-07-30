@@ -23,7 +23,7 @@ export type AgentContext = {
   signableAddresses?: string[];
 };
 
-export function createCipherTools(ctx: AgentContext): Record<string, Tool> {
+export function createErvoTools(ctx: AgentContext): Record<string, Tool> {
   return {
     list_wallets: listWalletsTool(ctx),
     get_portfolio: getPortfolioTool(ctx),

@@ -1,6 +1,6 @@
-import { createCipherAgent } from "@cipher/agent";
+import { createErvoAgent } from "@ervo/agent";
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { createDb } from "@cipher/db";
+import { createDb } from "@ervo/db";
 import { convertToModelMessages, type UIMessage } from "ai";
 
 export const maxDuration = 60;
@@ -108,7 +108,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const agent = createCipherAgent({ userId, signableAddresses });
+    const agent = createErvoAgent({ userId, signableAddresses });
     const modelMessages = await convertToModelMessages(messages);
     const result = agent.stream(modelMessages);
 

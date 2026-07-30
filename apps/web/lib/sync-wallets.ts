@@ -1,9 +1,9 @@
 "use client";
 
-import { cleanWalletName } from "@cipher/core";
+import { cleanWalletName } from "@ervo/core";
 import { chainFamilyForAddress } from "@/lib/turnkey-wallets";
 
-export const CIPHER_WALLETS_SYNCED_EVENT = "cipher:wallets-synced";
+export const ERVO_WALLETS_SYNCED_EVENT = "ervo:wallets-synced";
 
 const lastSyncSigByMode: Record<string, string> = {};
 let syncChain: Promise<void> = Promise.resolve();
@@ -28,17 +28,17 @@ function labelForWallet(
 
 function notifyWalletsSynced() {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(CIPHER_WALLETS_SYNCED_EVENT));
+  window.dispatchEvent(new CustomEvent(ERVO_WALLETS_SYNCED_EVENT));
 }
 
 /**
- * Persist Turnkey wallets into Cipher Supabase for the agent/tools.
+ * Persist Turnkey wallets into Ervo Supabase for the agent/tools.
  * Default: embedded only — never auto-import browser extensions.
  * Use mode "connected" after the user explicitly clicks Connect.
  *
  * Syncs are queued (not dropped) so connect-after-login cannot lose Phantom.
  */
-export async function syncTurnkeyWalletsToCipher(
+export async function syncTurnkeyWalletsToErvo(
   wallets: TurnkeyWalletLike[],
   opts: { mode?: SyncWalletsMode } = {},
 ) {

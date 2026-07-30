@@ -1,5 +1,5 @@
 {
-  "name": "@cipher/db",
+  "name": "@ervo/db",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@cipher/core": "workspace:*",
+    "@ervo/core": "workspace:*",
     "@supabase/supabase-js": "^2.111.0"
   },
   "devDependencies": {

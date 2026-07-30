@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { WalletRef } from "@cipher/core";
+import type { WalletRef } from "@ervo/core";
 
 export async function listWallets(
   db: SupabaseClient,
@@ -138,7 +138,7 @@ export async function deleteWallet(
   if (error) throw error;
 }
 
-/** Remove connected/external Cipher rows for an address (EVM case-insensitive). */
+/** Remove connected/external Ervo rows for an address (EVM case-insensitive). */
 export async function deleteWalletByAddress(
   db: SupabaseClient,
   userId: string,

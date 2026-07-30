@@ -6,8 +6,8 @@ import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
 import { Bot, LayoutDashboard, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ErvoLogo } from "@/components/ervo-logo";
-import { onCipherAuthed, waitForCipherSession } from "@/lib/cipher-session";
-import type { AgentRun } from "@cipher/agent-jobs/types";
+import { onErvoAuthed, waitForErvoSession } from "@/lib/ervo-session";
+import type { AgentRun } from "@ervo/agent-jobs/types";
 
 type ChatRow = {
   id: string;
@@ -50,7 +50,7 @@ export function Sidebar() {
       setAgents([]);
       return;
     }
-    const ready = await waitForCipherSession(8_000);
+    const ready = await waitForErvoSession(8_000);
     if (!ready) {
       setChats([]);
       setAgents([]);
@@ -76,7 +76,7 @@ export function Sidebar() {
 
   useEffect(() => {
     void refresh();
-    return onCipherAuthed(() => {
+    return onErvoAuthed(() => {
       void refresh();
     });
   }, [refresh, pathname]);
@@ -120,7 +120,7 @@ export function Sidebar() {
         </Link>
       </nav>
 
-      <div className="cipher-scroll flex-1 overflow-y-auto px-2 pb-4">
+      <div className="ervo-scroll flex-1 overflow-y-auto px-2 pb-4">
         <p className="px-2 pb-2 pt-1 text-[11px] font-medium uppercase tracking-wide text-zinc-600">
           Chats
         </p>

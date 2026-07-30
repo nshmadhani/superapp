@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Bot, MessageSquare } from "lucide-react";
-import type { AgentRun } from "@cipher/agent-jobs/types";
+import type { AgentRun } from "@ervo/agent-jobs/types";
 
 function statusColor(status: string) {
   if (status === "succeeded") return "text-emerald-400";
@@ -48,7 +48,7 @@ export function AgentsHome() {
   }, [refresh]);
 
   return (
-    <div className="cipher-scroll h-full overflow-y-auto">
+    <div className="ervo-scroll h-full overflow-y-auto">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
         <div className="flex items-start gap-3">
           <div className="mt-0.5 rounded-xl border border-zinc-800 bg-zinc-900/70 p-2.5">

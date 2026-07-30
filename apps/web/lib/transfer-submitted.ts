@@ -1,4 +1,4 @@
-import type { AgentLifiStatus } from "@cipher/adapters";
+import type { AgentLifiStatus } from "@ervo/adapters";
 
 /**
  * Structured transfer outcome injected into chat for the agent.
@@ -51,8 +51,8 @@ export type TransferSubmittedPayload = {
   tool?: string;
 };
 
-const OPEN = "<cipher_transfer_submitted>";
-const CLOSE = "</cipher_transfer_submitted>";
+const OPEN = "<ervo_transfer_submitted>";
+const CLOSE = "</ervo_transfer_submitted>";
 
 export function encodeTransferSubmitted(
   payload: Omit<TransferSubmittedPayload, "type">,

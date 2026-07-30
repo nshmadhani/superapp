@@ -13,9 +13,9 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
-import { CIPHER_WALLETS_SYNCED_EVENT, syncTurnkeyWalletsToCipher } from "@/lib/sync-wallets";
-import { waitForCipherSession } from "@/lib/cipher-session";
+import { ERVO_AUTHED_EVENT } from "@/components/auth-sync";
+import { ERVO_WALLETS_SYNCED_EVENT, syncTurnkeyWalletsToErvo } from "@/lib/sync-wallets";
+import { waitForErvoSession } from "@/lib/ervo-session";
 import {
   addressFormatForChain,
   chainFamilyForAddress,
@@ -28,7 +28,7 @@ import {
   walletDisplayName,
 } from "@/lib/wallet-display";
 
-type CipherWallet = {
+type ErvoWallet = {
   id: string;
   address: string;
   source: "external" | "turnkey" | string;
@@ -88,21 +88,21 @@ export function WalletModal({
   const [copied, setCopied] = useState<string | null>(null);
   const [walletName, setWalletName] = useState("Ervo");
   const [chain, setChain] = useState<ChainFamily>("evm");
-  // Hide Cipher modal while Turnkey's connect UI is open (otherwise it stacks on top)
+  // Hide Ervo modal while Turnkey's connect UI is open (otherwise it stacks on top)
   const [yieldToTurnkey, setYieldToTurnkey] = useState(false);
-  const [cipherWallets, setCipherWallets] = useState<CipherWallet[]>([]);
+  const [ervoWallets, setErvoWallets] = useState<ErvoWallet[]>([]);
 
-  const loadCipherWallets = useCallback(async () => {
+  const loadErvoWallets = useCallback(async () => {
     try {
       const res = await fetch("/api/wallets");
       if (!res.ok) {
-        setCipherWallets([]);
+        setErvoWallets([]);
         return;
       }
       const data = await res.json();
-      setCipherWallets((data.wallets ?? []) as CipherWallet[]);
+      setErvoWallets((data.wallets ?? []) as ErvoWallet[]);
     } catch {
-      setCipherWallets([]);
+      setErvoWallets([]);
     }
   }, []);
 
@@ -119,19 +119,19 @@ export function WalletModal({
     }
     // Intentionally no refreshWallets on open — Turnkey state is already loaded;
     // refetching here caused 429 Resource exhausted.
-    if (loggedIn) void loadCipherWallets();
-  }, [open, loggedIn, loadCipherWallets]);
+    if (loggedIn) void loadErvoWallets();
+  }, [open, loggedIn, loadErvoWallets]);
 
   useEffect(() => {
     if (!open || !loggedIn) return;
-    const refresh = () => void loadCipherWallets();
-    window.addEventListener(CIPHER_AUTHED_EVENT, refresh);
-    window.addEventListener(CIPHER_WALLETS_SYNCED_EVENT, refresh);
+    const refresh = () => void loadErvoWallets();
+    window.addEventListener(ERVO_AUTHED_EVENT, refresh);
+    window.addEventListener(ERVO_WALLETS_SYNCED_EVENT, refresh);
     return () => {
-      window.removeEventListener(CIPHER_AUTHED_EVENT, refresh);
-      window.removeEventListener(CIPHER_WALLETS_SYNCED_EVENT, refresh);
+      window.removeEventListener(ERVO_AUTHED_EVENT, refresh);
+      window.removeEventListener(ERVO_WALLETS_SYNCED_EVENT, refresh);
     };
-  }, [open, loggedIn, loadCipherWallets]);
+  }, [open, loggedIn, loadErvoWallets]);
 
   const embedded = useMemo(
     () => (wallets ?? []).filter((w) => String(w.source) === "embedded"),
@@ -153,11 +153,11 @@ export function WalletModal({
   /** DB-linked wallets not already shown as live Turnkey embedded/connected. */
   const linked = useMemo(
     () =>
-      cipherWallets.filter(
+      ervoWallets.filter(
         (w) =>
           !sessionAddresses.some((addr) => addressesMatch(addr, w.address)),
       ),
-    [cipherWallets, sessionAddresses],
+    [ervoWallets, sessionAddresses],
   );
 
   if (!open || yieldToTurnkey) return null;
@@ -192,12 +192,12 @@ export function WalletModal({
       }
     }
     if (providers.some((p) => (p.connectedAddresses ?? []).length > 0)) {
-      window.dispatchEvent(new CustomEvent(CIPHER_WALLETS_SYNCED_EVENT));
+      window.dispatchEvent(new CustomEvent(ERVO_WALLETS_SYNCED_EVENT));
     }
   }
 
   async function afterWalletMutation(mode: "embedded" | "connected") {
-    await waitForCipherSession(5_000);
+    await waitForErvoSession(5_000);
     // Connected path always hits Turnkey fresh — throttle cache often lags Phantom.
     let list: typeof wallets = [];
     try {
@@ -242,7 +242,7 @@ export function WalletModal({
         // keep first merge
       }
     }
-    await syncTurnkeyWalletsToCipher(merged as never, { mode });
+    await syncTurnkeyWalletsToErvo(merged as never, { mode });
     // Belt-and-suspenders: Turnkey providers sometimes expose addresses
     // before they show up as source:"connected" wallets.
     if (mode === "connected") {
@@ -313,7 +313,7 @@ export function WalletModal({
           try {
             await disconnectWalletAccount(provider);
           } catch {
-            // Still remove from Cipher even if provider disconnect fails
+            // Still remove from Ervo even if provider disconnect fails
           }
         }
         await fetch("/api/wallets", {
@@ -338,7 +338,7 @@ export function WalletModal({
     }
   }
 
-  async function onDeleteLinked(wallet: CipherWallet) {
+  async function onDeleteLinked(wallet: ErvoWallet) {
     setBusy("delete");
     setDeletingId(wallet.id);
     setError(null);
@@ -357,8 +357,8 @@ export function WalletModal({
           typeof body.error === "string" ? body.error : "Failed to remove",
         );
       }
-      await loadCipherWallets();
-      window.dispatchEvent(new CustomEvent(CIPHER_WALLETS_SYNCED_EVENT));
+      await loadErvoWallets();
+      window.dispatchEvent(new CustomEvent(ERVO_WALLETS_SYNCED_EVENT));
     } catch (err) {
       setError(friendlyTurnkeyError(err));
     } finally {
@@ -492,7 +492,7 @@ export function WalletModal({
           </form>
         ) : (
           <>
-            <div className="cipher-scroll max-h-[60vh] space-y-5 overflow-y-auto px-4 py-4">
+            <div className="ervo-scroll max-h-[60vh] space-y-5 overflow-y-auto px-4 py-4">
               {!loggedIn ? (
                 <p className="text-sm text-zinc-500">Log in to manage wallets.</p>
               ) : (

@@ -11,7 +11,7 @@ Ship the product as **Ervo** using the scripted demo’s UI, branding, layout, a
 
 ## In scope
 
-- User-facing rename Cipher → **Ervo** (metadata, sidebar, empty states, composer, wallet default label, WC metadata)
+- User-facing rename Ervo → **Ervo** (metadata, sidebar, empty states, composer, wallet default label, WC metadata)
 - Shell chrome: zinc tokens, sidebar IA, top-bar chip styling (live wallet address, not fixture)
 - Home: Ervo hero + tagline; keep live chat create + composer
 - Dashboard: adopt `DemoDashboard` layout (allocation bars, token icons, equity spark, wallet drill-down) fed by `/api/portfolio` + `/api/wallets`
@@ -22,7 +22,7 @@ Ship the product as **Ervo** using the scripted demo’s UI, branding, layout, a
 
 - Fixture playback / demo live sessions as product paths
 - Replacing live providers with demo mocks
-- Package rename `@cipher/*` (internal)
+- Package rename `@ervo/*` (internal)
 
 ## Success
 

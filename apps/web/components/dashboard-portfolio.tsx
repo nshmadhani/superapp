@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { CIPHER_AUTHED_EVENT } from "@/components/auth-sync";
-import { CIPHER_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
-import { waitForCipherSession } from "@/lib/cipher-session";
+import { ERVO_AUTHED_EVENT } from "@/components/auth-sync";
+import { ERVO_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
+import { waitForErvoSession } from "@/lib/ervo-session";
 import {
   addressesMatch,
   walletDisplayName,
@@ -14,11 +14,11 @@ import type {
   PortfolioView,
   ProtocolGroup,
   TokenGroup,
-} from "@cipher/zerion";
+} from "@ervo/zerion";
 import {
   resolveChainIcon,
   resolveProtocolIcon,
-} from "@cipher/zerion";
+} from "@ervo/zerion";
 
 type Wallet = {
   id: string;
@@ -508,12 +508,12 @@ export function DashboardPortfolio() {
     }
   }, [selected]);
 
-  // Turnkey can be logged in before the Cipher cookie exists — wait for sync.
+  // Turnkey can be logged in before the Ervo cookie exists — wait for sync.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       setLoading(true);
-      const ready = await waitForCipherSession();
+      const ready = await waitForErvoSession();
       if (cancelled) return;
       if (!ready) {
         setLoading(false);
@@ -534,12 +534,12 @@ export function DashboardPortfolio() {
         await loadPortfolio();
       })();
     };
-    window.addEventListener(CIPHER_AUTHED_EVENT, onAuthed);
-    window.addEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
+    window.addEventListener(ERVO_AUTHED_EVENT, onAuthed);
+    window.addEventListener(ERVO_WALLETS_SYNCED_EVENT, onSynced);
     return () => {
       cancelled = true;
-      window.removeEventListener(CIPHER_AUTHED_EVENT, onAuthed);
-      window.removeEventListener(CIPHER_WALLETS_SYNCED_EVENT, onSynced);
+      window.removeEventListener(ERVO_AUTHED_EVENT, onAuthed);
+      window.removeEventListener(ERVO_WALLETS_SYNCED_EVENT, onSynced);
     };
     // Intentionally once on mount + stable loaders; portfolio refetch is below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -681,7 +681,7 @@ export function DashboardPortfolio() {
   }, [selected, wallets, view?.wallets]);
 
   return (
-    <div className="cipher-scroll h-full overflow-y-auto">
+    <div className="ervo-scroll h-full overflow-y-auto">
       <div className="flex w-full flex-col gap-5 px-6 py-8 lg:px-10">
         <header className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight text-white">

@@ -1,8 +1,8 @@
-# Cipher — Vision
+# Ervo — Vision
 
 **Date:** 2026-07-25
 **Status:** Draft
-**Working name:** Cipher
+**Working name:** Ervo
 
 See also: full design spec — [`docs/superpowers/specs/2026-07-25-ai-crypto-wallet-design.md`](docs/superpowers/specs/2026-07-25-ai-crypto-wallet-design.md) · open items — [`TODO.md`](TODO.md)
 
@@ -16,7 +16,7 @@ If instead there were one app — one place to see everything, research anything
 
 ## The vision
 
-**Cipher is the consolidation layer crypto doesn't have yet: one home where trust, understanding, and onboarding all live in the same place.**
+**Ervo is the consolidation layer crypto doesn't have yet: one home where trust, understanding, and onboarding all live in the same place.**
 
 You say what you want — research something, check your portfolio, move funds, set up something recurring — and an agent figures out where things actually live and does it, across wallets, chains, and venues, through integrations that have already been vetted. No app-hopping, no separately trusting a dozen protocols, no relearning a new UI for every new thing you want to do.
 
@@ -32,8 +32,8 @@ Everybody trying to actually use crypto, not just watch it. Active retail trader
 
 ## What it does
 
-Cipher is given enough tools and access to do whatever a user asks of it — research, portfolio visibility, moving money, trading, automations — and to do it seamlessly, without the user needing to know which underlying app or venue is doing the work. The point isn't a fixed feature list; it's breadth: research a position, swap an asset, catch an opportunity across venues, park funds somewhere safe, set up something to run on its own later. If it's a legitimate crypto task, it should be something you can just ask Cipher to handle.
+Ervo is given enough tools and access to do whatever a user asks of it — research, portfolio visibility, moving money, trading, automations — and to do it seamlessly, without the user needing to know which underlying app or venue is doing the work. The point isn't a fixed feature list; it's breadth: research a position, swap an asset, catch an opportunity across venues, park funds somewhere safe, set up something to run on its own later. If it's a legitimate crypto task, it should be something you can just ask Ervo to handle.
 
-## What Cipher is not
+## What Ervo is not
 
-Cipher is not another place to trade — it's not one more app competing for a tab in your browser. Cipher is meant to be the home for interacting with crypto: the one place you go, regardless of what you actually need to do. Done right, it shouldn't feel like "using a crypto app" at all — it should just feel like getting the thing you asked for done.
+Ervo is not another place to trade — it's not one more app competing for a tab in your browser. Ervo is meant to be the home for interacting with crypto: the one place you go, regardless of what you actually need to do. Done right, it shouldn't feel like "using a crypto app" at all — it should just feel like getting the thing you asked for done.

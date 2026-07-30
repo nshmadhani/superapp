@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { getLifiStatus } from "@cipher/adapters";
+import { getLifiStatus } from "@ervo/adapters";
 
 /** Server-only LiFi status poll — keeps LIFI_API_KEY off the client. */
 export async function GET(req: Request) {

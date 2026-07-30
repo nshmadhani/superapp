@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { fetchMorphoUsdcVaults } from "@cipher/adapters";
-import { fetchUsdcYields } from "@cipher/defillama";
+import { fetchMorphoUsdcVaults } from "@ervo/adapters";
+import { fetchUsdcYields } from "@ervo/defillama";
 
 export function getYieldsTool() {
   return tool({

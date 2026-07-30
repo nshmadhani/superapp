@@ -1,4 +1,4 @@
-import { webSearch, type SearchHit } from "@cipher/search";
+import { webSearch, type SearchHit } from "@ervo/search";
 import { e2bConfigured, parseJsonFromE2bText, runInE2b } from "../e2b";
 import type { GeneralArtifact } from "../types";
 

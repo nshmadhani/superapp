@@ -1,5 +1,5 @@
 {
-  "name": "@cipher/agent-jobs",
+  "name": "@ervo/agent-jobs",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -24,7 +24,7 @@
     "build": "tsc --noEmit"
   },
   "dependencies": {
-    "@cipher/search": "workspace:*",
+    "@ervo/search": "workspace:*",
     "@e2b/code-interpreter": "^2.6.0",
     "@noble/hashes": "^2.2.0",
     "@noble/secp256k1": "^3.1.0",

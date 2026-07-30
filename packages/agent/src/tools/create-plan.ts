@@ -1,8 +1,8 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { quoteLifiTransfer } from "@cipher/adapters";
-import { chainFamilyForLifiChain, type Plan } from "@cipher/core";
+import { quoteLifiTransfer } from "@ervo/adapters";
+import { chainFamilyForLifiChain, type Plan } from "@ervo/core";
 import { store } from "../store";
 import { isAddressSignable, toSignableSet } from "../signable";
 import type { AgentContext } from "./index";
@@ -12,7 +12,7 @@ export function createPlanTool(ctx: AgentContext) {
     description:
       "Create a confirm-gated LI.FI transfer plan ONLY (same-chain swap or cross-chain bridge). Works for most portfolio tokens — e.g. Solana JLP → USDC/SOL, alts, stables — use symbol or contract address from get_portfolio. Do NOT use this for Morpho/lend/vault deposits — use create_action_plan with lend instead. Do not invent other bridges. Does not send a transaction. Same-chain ERC20→native (e.g. USDC→ETH) still requires native gas on the source chain — never use this to 'buy gas' when the wallet has ~0 native; bridge native from elsewhere or tell the user to top up ETH first.",
     inputSchema: z.object({
-      walletId: z.string().describe("Cipher wallet id from list_wallets (source)"),
+      walletId: z.string().describe("Ervo wallet id from list_wallets (source)"),
       fromChainId: z
         .number()
         .int()

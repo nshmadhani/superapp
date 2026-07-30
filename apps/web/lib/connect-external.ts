@@ -5,7 +5,7 @@ import {
   type ConnectedExternal,
 } from "@/lib/connected-externals";
 import { chainFamilyForAddress } from "@/lib/turnkey-wallets";
-import { CIPHER_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
+import { ERVO_WALLETS_SYNCED_EVENT } from "@/lib/sync-wallets";
 
 type Eip1193 = {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
@@ -103,7 +103,7 @@ async function persistExternal(entry: ConnectedExternal) {
       typeof body.error === "string" ? body.error : "Failed to link wallet",
     );
   }
-  window.dispatchEvent(new CustomEvent(CIPHER_WALLETS_SYNCED_EVENT));
+  window.dispatchEvent(new CustomEvent(ERVO_WALLETS_SYNCED_EVENT));
 }
 
 export async function connectInjectedEvm(): Promise<ConnectedExternal> {

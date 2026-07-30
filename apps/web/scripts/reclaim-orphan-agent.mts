@@ -13,7 +13,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { getEvmPublicClient, resolveEvmRpcUrl } from "@cipher/rpc";
+import { getEvmPublicClient, resolveEvmRpcUrl } from "@ervo/rpc";
 
 const userId = "43db2340-a08f-42b5-ba88-eeb5109c96aa";
 const runId = "60e00d93-2588-4eda-8464-7f18e9667418";

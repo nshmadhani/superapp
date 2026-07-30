@@ -1,4 +1,4 @@
-# Cipher
+# Ervo
 
 AI crypto co-pilot — research and act through tools (no hardcoded flows).
 
@@ -27,20 +27,20 @@ cp .env.example apps/web/.env.local
 supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
 
-pnpm --filter @cipher/web dev
+pnpm --filter @ervo/web dev
 ```
 
 Open [http://localhost:3001](http://localhost:3001) (or your configured port).
 
 SSR clients: `apps/web/lib/supabase/{client,server,proxy}.ts` + `apps/web/proxy.ts`.  
-Schema: `supabase/migrations/20260728000000_cipher_schema.sql`.
+Schema: `supabase/migrations/20260728000000_ervo_schema.sql`.
 
 ## Scripts
 
 ```bash
 pnpm test          # package unit tests (db live smoke runs when SUPABASE_SERVICE_ROLE_KEY is set)
-pnpm --filter @cipher/web build
-pnpm --filter @cipher/web dev
+pnpm --filter @ervo/web build
+pnpm --filter @ervo/web dev
 ```
 
 
@@ -48,6 +48,6 @@ pnpm --filter @cipher/web dev
 ## Docs
 
 - Design: `docs/superpowers/specs/2026-07-25-ai-crypto-wallet-design.md`
-- Phase 1 plan: `docs/superpowers/plans/2026-07-25-cipher-phase1.md`
+- Phase 1 plan: `docs/superpowers/plans/2026-07-25-ervo-phase1.md`
 - Open items: `TODO.md`
 

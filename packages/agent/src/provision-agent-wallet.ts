@@ -1,13 +1,13 @@
-import { createEvmWallet } from "@cipher/turnkey";
+import { createEvmWallet } from "@ervo/turnkey";
 import {
   agentWalletLabel,
   type AgentType,
   type AgentWallet,
-} from "@cipher/agent-jobs";
+} from "@ervo/agent-jobs";
 import { store } from "./store";
 
 /**
- * @deprecated Prefer createEphemeralAgentWallet from @cipher/agent-jobs.
+ * @deprecated Prefer createEphemeralAgentWallet from @ervo/agent-jobs.
  * Kept for emergency/legacy Turnkey provisioning.
  */
 export async function provisionAgentWallet(opts: {
@@ -44,7 +44,7 @@ export async function provisionAgentWallet(opts: {
     chainFamily: "evm",
     label,
     source: "ephemeral",
-    cipherWalletId: wallet.id,
+    ervoWalletId: wallet.id,
     turnkeyWalletId: created.turnkeyWalletId,
   };
 }

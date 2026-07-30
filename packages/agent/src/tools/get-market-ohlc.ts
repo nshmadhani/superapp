@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { fetchBinanceKlines, resolveBinanceSymbol } from "@cipher/agent-jobs";
+import { fetchBinanceKlines, resolveBinanceSymbol } from "@ervo/agent-jobs";
 
 /**
  * Live spot OHLCV from Binance public API — use for prices / TA in chat.

@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { store } from "@cipher/agent";
+import { store } from "@ervo/agent";
 
 export async function POST(
   req: Request,

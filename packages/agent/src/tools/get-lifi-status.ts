@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { buildAgentLifiStatus, getLifiStatus } from "@cipher/adapters";
+import { buildAgentLifiStatus, getLifiStatus } from "@ervo/adapters";
 
 /**
  * Agent-facing LI.FI status — includes terminalKind, substatus, and Relay

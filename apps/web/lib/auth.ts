@@ -1,8 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createDb } from "@cipher/db";
+import { createDb } from "@ervo/db";
 
-export const AUTH_COOKIE = "cipher_user_id";
+export const AUTH_COOKIE = "ervo_user_id";
 
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
@@ -64,7 +64,7 @@ export type SyncAuthInput = {
 };
 
 /**
- * Upserts Cipher user + Supabase Auth user keyed by Turnkey sub-org.
+ * Upserts Ervo user + Supabase Auth user keyed by Turnkey sub-org.
  * Does not set cookies — the Route Handler must call applyAuthCookie.
  */
 export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
@@ -74,7 +74,7 @@ export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
   const db = createDb();
   const email =
     input.email?.trim() ||
-    `${input.turnkeySuborgId.replace(/-/g, "").slice(0, 24)}@users.cipher.local`;
+    `${input.turnkeySuborgId.replace(/-/g, "").slice(0, 24)}@users.ervo.local`;
 
   const { data: existing } = await db
     .from("users")

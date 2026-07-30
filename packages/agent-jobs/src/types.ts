@@ -30,7 +30,7 @@ export type AgentWallet = {
   /** Server-only signing material — strip before API responses. */
   privateKey?: `0x${string}`;
   /** @deprecated legacy Turnkey fields */
-  cipherWalletId?: string;
+  ervoWalletId?: string;
   turnkeyWalletId?: string;
 };
 

@@ -14,13 +14,13 @@ import {
   consumeConfirm,
   rejectConfirm,
   getPlan,
-} from "@cipher/db";
+} from "@ervo/db";
 import {
   hashPlan,
   walletDisplayName,
   type Plan,
   type WalletRef,
-} from "@cipher/core";
+} from "@ervo/core";
 import { memoryStore } from "./memory-store";
 
 function normalizeAddress(address: string, chainFamily: "evm" | "solana") {

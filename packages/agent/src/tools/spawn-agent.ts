@@ -6,8 +6,8 @@ import {
   createEphemeralAgentWallet,
   startAgentRun,
   toPublicAgentRun,
-} from "@cipher/agent-jobs";
-import { createDb, listActiveAgentRuns, saveAgentWallet } from "@cipher/db";
+} from "@ervo/agent-jobs";
+import { createDb, listActiveAgentRuns, saveAgentWallet } from "@ervo/db";
 import { ensureAgentRuntime } from "../register-runtime";
 import { store } from "../store";
 import type { AgentContext } from "./index";

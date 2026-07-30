@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Implement task-by-task. Steps use checkbox syntax.
 
-**Goal:** Swap/bridge via LI.FI SDK with Cipher confirm gate.
+**Goal:** Swap/bridge via LI.FI SDK with Ervo confirm gate.
 
 **Architecture:** Server quotes with `@lifi/sdk` `getQuote`; store step/route on Plan; after UI confirm, client executes via SDK + Turnkey and polls `getStatus`.
 
@@ -12,14 +12,14 @@
 
 - Confirm before any broadcast
 - EVM + Solana only in first cut
-- Integrator name `ciper-string` (`LIFI_INTEGRATOR`, server-only)
+- Integrator name `ervo` (`LIFI_INTEGRATOR`, server-only)
 - `LIFI_API_KEY` server-only — never `NEXT_PUBLIC_*`
 
 ---
 
 ### Task 1: Adapter quote + status
 
-- [x] Add `@lifi/sdk` to `@cipher/adapters`
+- [x] Add `@lifi/sdk` to `@ervo/adapters`
 - [x] `quoteLifiTransfer` + `getLifiStatus` + chain helpers
 - [x] Unit test with mocked getQuote
 

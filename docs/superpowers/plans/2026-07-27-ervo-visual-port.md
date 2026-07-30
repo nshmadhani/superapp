@@ -14,8 +14,8 @@
 
 **Files:** `apps/web/app/layout.tsx`, `apps/web/app/page.tsx`, `apps/web/components/sidebar.tsx`, `apps/web/components/chat/empty-state.tsx`, `apps/web/components/chat/chat-composer.tsx`, `apps/web/components/providers.tsx`, `apps/web/components/wallet-modal.tsx`, `apps/web/app/api/wallets/route.ts`, `apps/web/lib/sync-wallets.ts`
 
-- [ ] Replace user-visible "Cipher" with "Ervo"
-- [ ] Keep internal `createCipher*` / session helper names
+- [ ] Replace user-visible "Ervo" with "Ervo"
+- [ ] Internal helpers use Ervo naming
 - [ ] Smoke: home + sidebar show Ervo
 
 ### Task 2: Top bar chrome (live)
@@ -40,5 +40,5 @@
 
 ### Task 5: Verify
 
-- [ ] `pnpm --filter @cipher/rpc test`
+- [ ] `pnpm --filter @ervo/rpc test`
 - [ ] Typecheck touched files; start dev if down

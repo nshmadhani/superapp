@@ -91,7 +91,7 @@ const components: Components = {
 
 export function Markdown({ children }: { children: string }) {
   return (
-    <div className="cipher-md text-sm">
+    <div className="ervo-md text-sm">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
         {children}
       </ReactMarkdown>

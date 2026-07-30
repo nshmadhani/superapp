@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ChatComposer } from "@/components/chat/chat-composer";
 import { ChatEmptyState } from "@/components/chat/empty-state";
-import { waitForCipherSession } from "@/lib/cipher-session";
+import { waitForErvoSession } from "@/lib/ervo-session";
 
 export default function AppHomePage() {
   const { authState, session, handleLogin } = useTurnkey();
@@ -25,7 +25,7 @@ export default function AppHomePage() {
     setStarting(true);
     setError(null);
     try {
-      const ready = await waitForCipherSession();
+      const ready = await waitForErvoSession();
       if (!ready) throw new Error("Account sync timed out — try again");
       const created = await fetch("/api/chats", {
         method: "POST",
@@ -34,7 +34,7 @@ export default function AppHomePage() {
       });
       if (!created.ok) throw new Error("Could not create chat");
       const body = await created.json();
-      sessionStorage.setItem(`cipher:pending:${body.chat.id}`, trimmed);
+      sessionStorage.setItem(`ervo:pending:${body.chat.id}`, trimmed);
       router.push(`/app/c/${body.chat.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start chat");

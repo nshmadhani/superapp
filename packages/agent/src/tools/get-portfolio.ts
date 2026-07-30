@@ -4,7 +4,7 @@ import {
   fetchAggregatedPortfolio,
   fetchPortfolio,
   portfolioSnapshotToView,
-} from "@cipher/zerion";
+} from "@ervo/zerion";
 import { store } from "../store";
 import type { AgentContext } from "./index";
 
@@ -23,7 +23,7 @@ export function getPortfolioTool(ctx: AgentContext) {
       walletId: z
         .string()
         .optional()
-        .describe("Cipher wallet id from list_wallets (preferred)"),
+        .describe("Ervo wallet id from list_wallets (preferred)"),
       address: z
         .string()
         .optional()

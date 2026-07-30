@@ -2,11 +2,11 @@
 
 import { useTurnkey, AuthState } from "@turnkey/react-wallet-kit";
 import { useEffect, useRef } from "react";
-import { syncTurnkeyWalletsToCipher } from "@/lib/sync-wallets";
+import { syncTurnkeyWalletsToErvo } from "@/lib/sync-wallets";
 import { rememberTurnkeyWallets } from "@/lib/turnkey-refresh";
 
-export const CIPHER_AUTHED_EVENT = "cipher:authed";
-export const CIPHER_LOGOUT_EVENT = "cipher:logout";
+export const ERVO_AUTHED_EVENT = "ervo:authed";
+export const ERVO_LOGOUT_EVENT = "ervo:logout";
 
 /** Drop auto-imported Browser wallets / EVM case-dupes. Never wipe labeled Connect wallets. */
 async function cleanupStaleExternalWallets() {
@@ -22,7 +22,7 @@ async function cleanupStaleExternalWallets() {
 }
 
 /**
- * When Turnkey authenticates: upsert Cipher user in Supabase, then sync wallets.
+ * When Turnkey authenticates: upsert Ervo user in Supabase, then sync wallets.
  * Wallet sync waits for auth cookie so /api/wallets never 401s on race.
  */
 export function AuthSync() {
@@ -74,7 +74,7 @@ export function AuthSync() {
           return;
         }
 
-        // Confirm cipher_user_id cookie stuck before any authenticated API calls.
+        // Confirm ervo_user_id cookie stuck before any authenticated API calls.
         const me = await fetch("/api/auth/me");
         const meBody = me.ok ? await me.json() : null;
         if (!meBody?.user?.id) {
@@ -100,14 +100,14 @@ export function AuthSync() {
           syncedWalletSig.current = sig;
           rememberTurnkeyWallets(queued);
           await cleanupStaleExternalWallets();
-          await syncTurnkeyWalletsToCipher(queued, { mode: "embedded" }).catch(
-            (err) => console.error("cipher wallet sync failed", err),
+          await syncTurnkeyWalletsToErvo(queued, { mode: "embedded" }).catch(
+            (err) => console.error("ervo wallet sync failed", err),
           );
         } else {
           await cleanupStaleExternalWallets();
         }
 
-        window.dispatchEvent(new CustomEvent(CIPHER_AUTHED_EVENT));
+        window.dispatchEvent(new CustomEvent(ERVO_AUTHED_EVENT));
       } catch (err) {
         console.error("auth sync failed", err);
         syncedAuthKey.current = null;
@@ -139,8 +139,8 @@ export function AuthSync() {
 
     void (async () => {
       await cleanupStaleExternalWallets();
-      await syncTurnkeyWalletsToCipher(wallets, { mode: "embedded" }).catch(
-        (err) => console.error("cipher wallet sync failed", err),
+      await syncTurnkeyWalletsToErvo(wallets, { mode: "embedded" }).catch(
+        (err) => console.error("ervo wallet sync failed", err),
       );
     })();
   }, [authState, wallets]);

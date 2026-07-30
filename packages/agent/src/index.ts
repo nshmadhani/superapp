@@ -1,9 +1,9 @@
-export { CIPHER_SYSTEM_PROMPT, cipherSystemPrompt } from "./system-prompt";
-export { createCipherAgent } from "./create-cipher-agent";
-export { createCipherTools, type AgentContext } from "./tools";
+export { ERVO_SYSTEM_PROMPT, ervoSystemPrompt } from "./system-prompt";
+export { createErvoAgent } from "./create-ervo-agent";
+export { createErvoTools, type AgentContext } from "./tools";
 export { memoryStore } from "./memory-store";
 export { store } from "./store";
-/** @deprecated Prefer ephemeral agent wallets from @cipher/agent-jobs */
+/** @deprecated Prefer ephemeral agent wallets from @ervo/agent-jobs */
 export { provisionAgentWallet } from "./provision-agent-wallet";
 export { destroyAgentRun, type DestroyAgentResult } from "./destroy-agent";
 export {

@@ -6,7 +6,7 @@
 
 ## Goal
 
-Cipher uses **LI.FI as the universal transfer adapter**. Cipher owns confirm-gated Plans; the LiFi SDK owns routing and execution after the user confirms.
+Ervo uses **LI.FI as the universal transfer adapter**. Ervo owns confirm-gated Plans; the LiFi SDK owns routing and execution after the user confirms.
 
 ## Trust boundary
 
@@ -20,7 +20,7 @@ User Confirm → approveConfirm
 
 Plan hash covers wallet + transfer steps. Route/quote JSON and unsigned tx data are stored on the plan but omitted from the hash (same pattern as prior `unsignedTx`).
 
-## Adapter API (`@cipher/adapters`)
+## Adapter API (`@ervo/adapters`)
 
 | Method | Where | Role |
 |--------|--------|------|
@@ -47,7 +47,7 @@ Transaction Review shows from/to chain, tokens, min out, tool (DEX/bridge), ETA.
 ## Env (server-only)
 
 - `LIFI_API_KEY` — never expose via `NEXT_PUBLIC_*`
-- `LIFI_INTEGRATOR` — default `ciper-string`
+- `LIFI_INTEGRATOR` — default `ervo`
 - Quotes + status run on the server; the browser only signs the returned source tx via Turnkey
 
 ## Non-goals

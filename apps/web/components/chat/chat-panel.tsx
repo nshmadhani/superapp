@@ -152,7 +152,7 @@ function ChatInner({
 
   useEffect(() => {
     if (pendingSent.current || status !== "ready") return;
-    const key = `cipher:pending:${chatId}`;
+    const key = `ervo:pending:${chatId}`;
     const pending = sessionStorage.getItem(key);
     if (!pending) return;
     sessionStorage.removeItem(key);
@@ -202,7 +202,7 @@ function ChatInner({
       <div
         ref={scrollerRef}
         onScroll={onScroll}
-        className="cipher-scroll flex-1 overflow-y-auto px-4 pb-28 pt-6"
+        className="ervo-scroll flex-1 overflow-y-auto px-4 pb-28 pt-6"
       >
         <div className="mx-auto w-full max-w-[57.6rem]">
           {messages.length === 0 && (

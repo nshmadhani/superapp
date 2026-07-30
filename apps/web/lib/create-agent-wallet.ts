@@ -1,11 +1,11 @@
 /**
- * @deprecated Agent wallets are ephemeral (see @cipher/agent-jobs createEphemeralAgentWallet).
+ * @deprecated Agent wallets are ephemeral (see @ervo/agent-jobs createEphemeralAgentWallet).
  * Kept so old imports do not break builds.
  */
-import type { AgentType } from "@cipher/agent-jobs/types";
+import type { AgentType } from "@ervo/agent-jobs/types";
 
 export type LegacyAgentWalletClientResult = {
-  cipherWalletId: string;
+  ervoWalletId: string;
   address: string;
   chainFamily: "evm";
   turnkeyWalletId: string;

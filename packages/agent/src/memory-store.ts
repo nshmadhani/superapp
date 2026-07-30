@@ -1,4 +1,4 @@
-import { hashPlan, type Plan, type PlanUnsignedTx } from "@cipher/core";
+import { hashPlan, type Plan, type PlanUnsignedTx } from "@ervo/core";
 
 type StoredPlan = {
   plan: Plan;

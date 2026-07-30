@@ -7,7 +7,7 @@ export type ConnectedExternal = {
   providerId: "injected-evm" | "phantom-solana";
 };
 
-const STORAGE_KEY = "cipher:connected-externals";
+const STORAGE_KEY = "ervo:connected-externals";
 
 let memory: ConnectedExternal[] = [];
 

@@ -5,7 +5,7 @@ export type CreatedEvmWallet = {
   address: `0x${string}`;
 };
 
-export type CreatedCipherWallet = {
+export type CreatedErvoWallet = {
   turnkeyWalletId: string;
   accounts: Array<{
     address: string;
@@ -13,7 +13,7 @@ export type CreatedCipherWallet = {
   }>;
 };
 
-export type CreateCipherWalletOpts = {
+export type CreateErvoWalletOpts = {
   /** User sub-org when creating agent wallets the user can sign with. */
   organizationId?: string;
   /** When true, only create an EVM account (default for agent wallets). */
@@ -22,13 +22,13 @@ export type CreateCipherWalletOpts = {
 
 /**
  * Creates an Ethereum wallet in the Turnkey organization.
- * Prefer {@link createCipherWallet} for EVM + Solana.
+ * Prefer {@link createErvoWallet} for EVM + Solana.
  */
 export async function createEvmWallet(
-  label = "Cipher wallet",
-  opts?: CreateCipherWalletOpts,
+  label = "Ervo wallet",
+  opts?: CreateErvoWalletOpts,
 ): Promise<CreatedEvmWallet> {
-  const created = await createCipherWallet(label, {
+  const created = await createErvoWallet(label, {
     ...opts,
     evmOnly: true,
   });
@@ -46,10 +46,10 @@ export async function createEvmWallet(
  * Creates one Turnkey wallet with EVM (+ optional Solana) accounts.
  * Never returns private key material — only wallet id + addresses.
  */
-export async function createCipherWallet(
-  label = "Cipher wallet",
-  opts?: CreateCipherWalletOpts,
-): Promise<CreatedCipherWallet> {
+export async function createErvoWallet(
+  label = "Ervo wallet",
+  opts?: CreateErvoWalletOpts,
+): Promise<CreatedErvoWallet> {
   const turnkey = createTurnkeyClient();
   const api = turnkey.apiClient();
 

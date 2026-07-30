@@ -1,6 +1,6 @@
 "use client";
 
-import { isLifiEvmChain, isLifiSolanaChain } from "@cipher/core";
+import { isLifiEvmChain, isLifiSolanaChain } from "@ervo/core";
 import { Connection, VersionedTransaction } from "@solana/web3.js";
 import {
   decodeFunctionData,
@@ -412,7 +412,7 @@ export function findWalletAccount(
 /**
  * Resolve a Turnkey account for signing.
  * Prefers the live kit account (checksummed address + source).
- * Falls back to address-only for embedded wallets — Cipher stores EVM
+ * Falls back to address-only for embedded wallets — Ervo stores EVM
  * addresses lowercased, and Turnkey signTransaction only needs `signWith`.
  */
 export function resolveSignAccount(

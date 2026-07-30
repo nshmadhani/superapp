@@ -1,5 +1,5 @@
 {
-  "name": "@cipher/turnkey",
+  "name": "@ervo/turnkey",
   "version": "0.0.1",
   "private": true,
   "type": "module",

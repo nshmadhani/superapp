@@ -1,4 +1,4 @@
-# Cipher — YC Agents Surface (E2B) Design
+# Ervo — YC Agents Surface (E2B) Design
 
 **Date:** 2026-07-26  
 **Status:** Approved for implementation (Approach 2)  
@@ -34,7 +34,7 @@ AgentRun {
 
 Every AgentRun owns a dedicated Turnkey EVM wallet (label `Agent · {TYPE} · {shortId}`):
 
-- **Agents UI:** create wallet in the user's Turnkey sub-org (client `createWallet`), sync to Cipher, pass on `POST /api/agents`.
+- **Agents UI:** create wallet in the user's Turnkey sub-org (client `createWallet`), sync to Ervo, pass on `POST /api/agents`.
 - **Chat `spawn_agent` / API without wallet:** server `provisionAgentWallet` (prefer user `turnkey_suborg_id`, fallback parent org).
 - Wallet is stored on the run, listed in Agents UI, and stamped onto artifacts (`walletAddress`).
 

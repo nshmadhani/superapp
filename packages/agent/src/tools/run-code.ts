@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { e2bConfigured, runInE2b } from "@cipher/agent-jobs";
+import { e2bConfigured, runInE2b } from "@ervo/agent-jobs";
 
 /**
  * Short inline code execution for chat (not a long-running agent).

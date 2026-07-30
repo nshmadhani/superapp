@@ -1,5 +1,5 @@
 import { AuthError, requireAuthUserId } from "@/lib/auth";
-import { store } from "@cipher/agent";
+import { store } from "@ervo/agent";
 import {
   cachedPortfolioView,
   fetchAggregatedPortfolio,
@@ -7,7 +7,7 @@ import {
   portfolioApiCacheKey,
   portfolioSnapshotToView,
   type PortfolioView,
-} from "@cipher/zerion";
+} from "@ervo/zerion";
 
 function addressesMatch(a: string, b: string): boolean {
   if (a.startsWith("0x") || b.startsWith("0x")) {
