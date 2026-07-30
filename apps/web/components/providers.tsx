@@ -13,8 +13,24 @@ import { AuthSync } from "./auth-sync";
 
 const walletConnectProjectId =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() ?? "";
-const appUrl =
-  process.env.NEXT_PUBLIC_APP_URL?.trim() || "http://localhost:3001";
+
+function resolveAppUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  // Vercel provides the deployment host; prefer production custom domain.
+  if (process.env.VERCEL_ENV === "production") {
+    return "https://www.ervo.xyz";
+  }
+  const vercel =
+    process.env.NEXT_PUBLIC_VERCEL_URL?.trim() ||
+    process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    return vercel.startsWith("http") ? vercel : `https://${vercel}`;
+  }
+  return "http://localhost:3000";
+}
+
+const appUrl = resolveAppUrl();
 const hasWalletConnect = walletConnectProjectId.length > 0;
 
 // Wagmi is only used for light chain helpers — do NOT add wagmi's walletConnect

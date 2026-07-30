@@ -63,9 +63,33 @@ export type SyncAuthInput = {
   email?: string | null;
 };
 
+export function formatUnknownError(err: unknown): string {
+  if (err instanceof Error) return err.message || err.name;
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    const o = err as {
+      message?: unknown;
+      error?: unknown;
+      code?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    const parts = [o.message, o.error, o.code, o.details, o.hint]
+      .map((p) => (typeof p === "string" ? p : null))
+      .filter(Boolean);
+    if (parts.length) return parts.join(" · ");
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "unknown_error";
+    }
+  }
+  return "unknown_error";
+}
+
 /**
- * Upserts Ervo user + Supabase Auth user keyed by Turnkey sub-org.
- * Does not set cookies — the Route Handler must call applyAuthCookie.
+ * Upserts Ervo user keyed by Turnkey sub-org.
+ * Supabase Auth mirroring is best-effort and must not block login.
  */
 export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
   userId: string;
@@ -76,25 +100,31 @@ export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
     input.email?.trim() ||
     `${input.turnkeySuborgId.replace(/-/g, "").slice(0, 24)}@users.ervo.local`;
 
-  const { data: existing } = await db
+  const { data: existing, error: selectErr } = await db
     .from("users")
     .select("id, email")
     .eq("turnkey_suborg_id", input.turnkeySuborgId)
     .maybeSingle();
+  if (selectErr) {
+    throw new Error(`users_select: ${formatUnknownError(selectErr)}`);
+  }
 
   let userId: string;
 
   if (existing?.id) {
     userId = existing.id as string;
-    await db
+    const { error: updateErr } = await db
       .from("users")
       .update({
         turnkey_user_id: input.turnkeyUserId,
         email: input.email ?? existing.email,
       })
       .eq("id", userId);
+    if (updateErr) {
+      throw new Error(`users_update: ${formatUnknownError(updateErr)}`);
+    }
   } else {
-    const { data: inserted, error } = await db
+    const { data: inserted, error: insertErr } = await db
       .from("users")
       .insert({
         turnkey_user_id: input.turnkeyUserId,
@@ -103,45 +133,43 @@ export async function syncTurnkeyUser(input: SyncAuthInput): Promise<{
       })
       .select("id")
       .single();
-    if (error) throw error;
+    if (insertErr) {
+      throw new Error(`users_insert: ${formatUnknownError(insertErr)}`);
+    }
+    if (!inserted?.id) throw new Error("users_insert: missing id");
     userId = inserted.id as string;
   }
 
-  // Mirror into Supabase Auth (service role)
-  const { data: list } = await db.auth.admin.listUsers({ page: 1, perPage: 200 });
-  const authUser = list?.users?.find(
-    (u: { id: string; email?: string; user_metadata?: Record<string, unknown> }) =>
-      u.id === userId ||
-      u.user_metadata?.turnkey_suborg_id === input.turnkeySuborgId ||
-      u.email === email,
-  );
-
-  if (!authUser) {
-    const { error: createErr } = await db.auth.admin.createUser({
-      id: userId,
-      email,
-      email_confirm: true,
-      user_metadata: {
-        turnkey_user_id: input.turnkeyUserId,
-        turnkey_suborg_id: input.turnkeySuborgId,
-      },
-    });
-    // ignore duplicate if race
-    if (createErr && !createErr.message.includes("already")) {
-      console.error("supabase auth createUser", createErr.message);
+  // Mirror into Supabase Auth — optional; cookie auth only needs public.users.
+  try {
+    const { data: byId } = await db.auth.admin.getUserById(userId);
+    if (byId?.user) {
+      await db.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          ...byId.user.user_metadata,
+          turnkey_user_id: input.turnkeyUserId,
+          turnkey_suborg_id: input.turnkeySuborgId,
+        },
+      });
+    } else {
+      const { error: createErr } = await db.auth.admin.createUser({
+        id: userId,
+        email,
+        email_confirm: true,
+        user_metadata: {
+          turnkey_user_id: input.turnkeyUserId,
+          turnkey_suborg_id: input.turnkeySuborgId,
+        },
+      });
+      if (
+        createErr &&
+        !/already|registered|exists/i.test(createErr.message ?? "")
+      ) {
+        console.error("supabase auth createUser", createErr.message);
+      }
     }
-  } else {
-    await db.auth.admin.updateUserById(authUser.id, {
-      user_metadata: {
-        ...authUser.user_metadata,
-        turnkey_user_id: input.turnkeyUserId,
-        turnkey_suborg_id: input.turnkeySuborgId,
-      },
-    });
-    if (authUser.id !== userId) {
-      // prefer auth user id as canonical if mismatch
-      userId = authUser.id;
-    }
+  } catch (authErr) {
+    console.error("supabase auth mirror skipped:", formatUnknownError(authErr));
   }
 
   return { userId, email: input.email ?? email };

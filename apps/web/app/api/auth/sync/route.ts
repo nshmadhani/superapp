@@ -1,8 +1,19 @@
-import { applyAuthCookie, syncTurnkeyUser } from "@/lib/auth";
+import { applyAuthCookie, formatUnknownError, syncTurnkeyUser } from "@/lib/auth";
+import { hasSupabaseEnv } from "@ervo/db";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
   try {
+    if (!hasSupabaseEnv()) {
+      return NextResponse.json(
+        {
+          error:
+            "Missing SUPABASE_SERVICE_ROLE_KEY or SUPABASE_URL on the server — set them in Vercel env and redeploy",
+        },
+        { status: 500 },
+      );
+    }
+
     const body = await req.json();
     const turnkeyUserId = String(body.turnkeyUserId ?? "");
     const turnkeySuborgId = String(body.turnkeySuborgId ?? "");
@@ -26,10 +37,8 @@ export async function POST(req: Request) {
     applyAuthCookie(res, result.userId);
     return res;
   } catch (err) {
-    console.error(err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "sync_failed" },
-      { status: 500 },
-    );
+    const message = formatUnknownError(err);
+    console.error("auth sync failed:", message, err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
