@@ -33,14 +33,36 @@ export type ProtocolGroup = {
   legs: PortfolioLeg[];
 };
 
-export type VenueStub = {
-  venues: Array<{
-    id: "hyperliquid" | "polymarket";
-    status: "coming_soon";
-  }>;
-  positions: [];
-  valueUsd: 0;
+export type VenueId = "hyperliquid" | "polymarket";
+
+export type VenueSummary = {
+  id: VenueId;
+  status: "ready" | "empty" | "error";
+  valueUsd: number;
+  error?: string;
 };
+
+export type VenuePositionRow = {
+  venue: VenueId;
+  title: string;
+  subtitle?: string;
+  valueUsd: number;
+  pnlUsd?: number | null;
+  quantity?: string;
+  iconUrl?: string | null;
+  walletId?: string;
+  walletLabel?: string;
+  walletAddress?: string;
+};
+
+export type VenuePositions = {
+  venues: VenueSummary[];
+  positions: VenuePositionRow[];
+  valueUsd: number;
+};
+
+/** @deprecated Prefer VenuePositions — kept for older call sites. */
+export type VenueStub = VenuePositions;
 
 export type PortfolioWalletRow = {
   walletId: string;
@@ -60,15 +82,15 @@ export type PortfolioView = {
   positionsValueUsd: number;
   asOf: string;
   tokens: TokenGroup[];
-  positions: VenueStub;
+  positions: VenuePositions;
   defi: ProtocolGroup[];
   wallets: PortfolioWalletRow[];
 };
 
-const VENUE_STUB: VenueStub = {
+const EMPTY_VENUES: VenuePositions = {
   venues: [
-    { id: "hyperliquid", status: "coming_soon" },
-    { id: "polymarket", status: "coming_soon" },
+    { id: "hyperliquid", status: "empty", valueUsd: 0 },
+    { id: "polymarket", status: "empty", valueUsd: 0 },
   ],
   positions: [],
   valueUsd: 0,
@@ -112,7 +134,7 @@ function toLeg(
 }
 
 /**
- * Shape flat Zerion legs into Tokens (by symbol) / Positions stub / DeFi (by protocol).
+ * Shape flat Zerion legs into Tokens (by symbol) / Positions / DeFi (by protocol).
  */
 export function buildPortfolioView(opts: {
   legs: Array<
@@ -124,6 +146,7 @@ export function buildPortfolioView(opts: {
   >;
   wallets?: PortfolioWalletRow[];
   asOf?: string;
+  venuePositions?: VenuePositions;
 }): PortfolioView {
   const legs = opts.legs.map(toLeg);
   const tokenLegs = legs.filter((l) => l.kind === "wallet");
@@ -180,15 +203,17 @@ export function buildPortfolioView(opts: {
 
   const tokensValueUsd = tokens.reduce((s, t) => s + t.valueUsd, 0);
   const defiValueUsd = defi.reduce((s, d) => s + d.valueUsd, 0);
+  const positions = opts.venuePositions ?? EMPTY_VENUES;
+  const positionsValueUsd = positions.valueUsd;
 
   return {
-    totalValueUsd: tokensValueUsd + defiValueUsd,
+    totalValueUsd: tokensValueUsd + defiValueUsd + positionsValueUsd,
     tokensValueUsd,
     defiValueUsd,
-    positionsValueUsd: 0,
+    positionsValueUsd,
     asOf: opts.asOf ?? new Date().toISOString(),
     tokens,
-    positions: VENUE_STUB,
+    positions,
     defi,
     wallets: opts.wallets ?? [],
   };

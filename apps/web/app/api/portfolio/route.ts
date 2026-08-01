@@ -25,8 +25,8 @@ const EMPTY_VIEW: PortfolioView = {
   tokens: [],
   positions: {
     venues: [
-      { id: "hyperliquid", status: "coming_soon" },
-      { id: "polymarket", status: "coming_soon" },
+      { id: "hyperliquid", status: "empty", valueUsd: 0 },
+      { id: "polymarket", status: "empty", valueUsd: 0 },
     ],
     positions: [],
     valueUsd: 0,
@@ -41,6 +41,9 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const scope = searchParams.get("scope");
     const address = searchParams.get("address");
+    const force =
+      searchParams.get("refresh") === "1" ||
+      searchParams.get("force") === "1";
 
     const wallets = await store.listWallets(userId);
 
@@ -54,7 +57,8 @@ export async function GET(req: Request) {
 
       const view = await cachedPortfolioView(
         portfolioApiCacheKey(userId, "all"),
-        () => fetchAggregatedPortfolio(wallets),
+        () => fetchAggregatedPortfolio(wallets, { force }),
+        { force },
       );
       return Response.json(view);
     }
@@ -71,7 +75,9 @@ export async function GET(req: Request) {
     const view = await cachedPortfolioView(
       portfolioApiCacheKey(userId, owned.address),
       async () => {
-        const snapshot = await fetchPortfolio(owned.address);
+        const snapshot = await fetchPortfolio(owned.address, undefined, {
+          force,
+        });
         return portfolioSnapshotToView(snapshot, {
           walletId: owned.id,
           label: owned.label,
@@ -79,6 +85,7 @@ export async function GET(req: Request) {
           source: owned.source,
         });
       },
+      { force },
     );
 
     return Response.json({

@@ -16,8 +16,8 @@ function emptyView(asOf: string): PortfolioView {
     tokens: [],
     positions: {
       venues: [
-        { id: "hyperliquid", status: "coming_soon" },
-        { id: "polymarket", status: "coming_soon" },
+        { id: "hyperliquid", status: "empty", valueUsd: 0 },
+        { id: "polymarket", status: "empty", valueUsd: 0 },
       ],
       positions: [],
       valueUsd: 0,
@@ -64,5 +64,17 @@ describe("portfolioApiCache", () => {
     const [a, b] = await Promise.all([p1, p2]);
     expect(a.asOf).toBe("t1");
     expect(b.asOf).toBe("t1");
+  });
+
+  it("force bypasses cached view", async () => {
+    const load = vi
+      .fn()
+      .mockResolvedValueOnce(emptyView("cached"))
+      .mockResolvedValueOnce(emptyView("fresh"));
+    const key = portfolioApiCacheKey("user", "all");
+    await cachedPortfolioView(key, load);
+    const forced = await cachedPortfolioView(key, load, { force: true });
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(forced.asOf).toBe("fresh");
   });
 });

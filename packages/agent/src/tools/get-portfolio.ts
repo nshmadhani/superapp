@@ -1,8 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
+  cachedPortfolioView,
   fetchAggregatedPortfolio,
   fetchPortfolio,
+  portfolioApiCacheKey,
   portfolioSnapshotToView,
 } from "@ervo/zerion";
 import { store } from "../store";
@@ -18,7 +20,7 @@ function addressesMatch(a: string, b: string): boolean {
 export function getPortfolioTool(ctx: AgentContext) {
   return tool({
     description:
-      "Fetch current balances via Zerion for EVM or Solana wallets. Returns shaped portfolio: tokens (grouped by symbol across chains), positions (HL/Polymarket stub), and defi (by protocol). Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
+      "Fetch current balances via Zerion plus read-only Hyperliquid and Polymarket positions. Returns shaped portfolio: tokens (grouped by symbol across chains), positions (HL/Polymarket), and defi (by protocol). Uses the same 20-minute cache as the dashboard — do not force-refresh unless the user asks. Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
     inputSchema: z.object({
       walletId: z
         .string()
@@ -45,7 +47,10 @@ export function getPortfolioTool(ctx: AgentContext) {
         }
 
         if (all) {
-          const view = await fetchAggregatedPortfolio(wallets);
+          const view = await cachedPortfolioView(
+            portfolioApiCacheKey(ctx.userId, "all"),
+            () => fetchAggregatedPortfolio(wallets),
+          );
           return {
             type: "portfolio_overview" as const,
             ...view,
@@ -87,13 +92,18 @@ export function getPortfolioTool(ctx: AgentContext) {
           }
         }
 
-        const snapshot = await fetchPortfolio(target.address);
-        const view = portfolioSnapshotToView(snapshot, {
-          walletId: target.id,
-          label: target.label,
-          chainFamily: target.chainFamily,
-          source: target.source,
-        });
+        const view = await cachedPortfolioView(
+          portfolioApiCacheKey(ctx.userId, target.address),
+          async () => {
+            const snapshot = await fetchPortfolio(target.address);
+            return portfolioSnapshotToView(snapshot, {
+              walletId: target.id,
+              label: target.label,
+              chainFamily: target.chainFamily,
+              source: target.source,
+            });
+          },
+        );
         return {
           type: "portfolio" as const,
           ...view,

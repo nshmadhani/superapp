@@ -1,6 +1,7 @@
 import type { PortfolioView } from "./view";
 
-const USER_CACHE_TTL_MS = 30_000;
+/** In-process portfolio view TTL. TODO: move to Supabase (shared durable cache). */
+export const PORTFOLIO_VIEW_CACHE_TTL_MS = 20 * 60 * 1000;
 
 type CacheEntry = {
   expiresAt: number;
@@ -22,14 +23,32 @@ export function portfolioApiCacheKey(
 export async function cachedPortfolioView(
   key: string,
   load: () => Promise<PortfolioView>,
-  ttlMs = USER_CACHE_TTL_MS,
+  opts?: { ttlMs?: number; force?: boolean },
 ): Promise<PortfolioView> {
-  const hit = userCache.get(key);
-  if (hit && hit.expiresAt > Date.now()) {
-    return hit.view;
+  const ttlMs = opts?.ttlMs ?? PORTFOLIO_VIEW_CACHE_TTL_MS;
+  const force = opts?.force === true;
+
+  if (force) {
+    userCache.delete(key);
+    const pending = userInflight.get(key);
+    if (pending) {
+      try {
+        await pending;
+      } catch {
+        /* ignore prior failure */
+      }
+    }
+  } else {
+    const hit = userCache.get(key);
+    if (hit && hit.expiresAt > Date.now()) {
+      return hit.view;
+    }
+    const pending = userInflight.get(key);
+    if (pending) return pending;
   }
-  const pending = userInflight.get(key);
-  if (pending) return pending;
+
+  const existing = userInflight.get(key);
+  if (existing) return existing;
 
   const job = load()
     .then((view) => {
@@ -43,7 +62,11 @@ export async function cachedPortfolioView(
   return job;
 }
 
-export function clearPortfolioApiCache(): void {
+export function clearPortfolioApiCache(key?: string): void {
+  if (key) {
+    userCache.delete(key);
+    return;
+  }
   userCache.clear();
   userInflight.clear();
 }

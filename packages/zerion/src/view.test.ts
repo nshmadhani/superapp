@@ -134,7 +134,7 @@ describe("buildPortfolioView", () => {
     expect(view.totalValueUsd).toBe(140);
   });
 
-  it("includes Positions venue stub", () => {
+  it("includes empty venue positions by default", () => {
     const view = buildPortfolioView({ legs: [] });
     expect(view.positions.valueUsd).toBe(0);
     expect(view.positions.venues.map((v) => v.id)).toEqual([
@@ -143,5 +143,28 @@ describe("buildPortfolioView", () => {
     ]);
     expect(view.tokens).toEqual([]);
     expect(view.totalValueUsd).toBe(0);
+  });
+
+  it("folds venue position value into totals", () => {
+    const view = buildPortfolioView({
+      legs: [usdcBase],
+      venuePositions: {
+        venues: [
+          { id: "hyperliquid", status: "ready", valueUsd: 250 },
+          { id: "polymarket", status: "empty", valueUsd: 0 },
+        ],
+        positions: [
+          {
+            venue: "hyperliquid",
+            title: "ETH perp",
+            valueUsd: 250,
+            pnlUsd: 10,
+          },
+        ],
+        valueUsd: 250,
+      },
+    });
+    expect(view.positionsValueUsd).toBe(250);
+    expect(view.totalValueUsd).toBe(350);
   });
 });

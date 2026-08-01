@@ -161,7 +161,26 @@ describe("fetchPortfolio", () => {
   });
 
   it("fetches each distinct wallet once when aggregating", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(mockOk());
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo) => {
+      const url = String(input);
+      if (url.includes("hyperliquid")) {
+        return {
+          ok: true,
+          json: async () => ({
+            marginSummary: { accountValue: "0" },
+            withdrawable: "0",
+            assetPositions: [],
+          }),
+        };
+      }
+      if (url.includes("polymarket.com/positions")) {
+        return { ok: true, json: async () => [] };
+      }
+      if (url.includes("polymarket.com/value")) {
+        return { ok: true, json: async () => [{ value: 0 }] };
+      }
+      return mockOk();
+    });
     vi.stubGlobal("fetch", fetchMock);
 
     const agg = await fetchAggregatedPortfolio([
@@ -179,7 +198,10 @@ describe("fetchPortfolio", () => {
       },
     ]);
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const zerionCalls = fetchMock.mock.calls.filter((c) =>
+      String(c[0]).includes("api.zerion.io"),
+    );
+    expect(zerionCalls).toHaveLength(2);
     expect(agg.wallets).toHaveLength(2);
     expect(agg.tokens.length).toBeGreaterThan(0);
     expect(agg.positions.venues).toHaveLength(2);

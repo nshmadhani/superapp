@@ -14,6 +14,8 @@ import type {
   PortfolioView,
   ProtocolGroup,
   TokenGroup,
+  VenuePositionRow,
+  VenueSummary,
 } from "@ervo/zerion";
 import {
   resolveChainIcon,
@@ -433,6 +435,123 @@ function ProtocolGroupRow({
   );
 }
 
+function venueLabel(id: VenueSummary["id"]) {
+  return id === "hyperliquid" ? "Hyperliquid" : "Polymarket";
+}
+
+function VenueStatusBadge({ venue }: { venue: VenueSummary }) {
+  if (venue.status === "error") {
+    return (
+      <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[11px] uppercase tracking-wide text-amber-300">
+        Error
+      </span>
+    );
+  }
+  if (venue.status === "empty") {
+    return (
+      <span className="rounded bg-zinc-800/80 px-2 py-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
+        Empty
+      </span>
+    );
+  }
+  return (
+    <span className="font-mono text-sm text-zinc-100">{usd(venue.valueUsd)}</span>
+  );
+}
+
+function VenuePositionsPanel({
+  venues,
+  positions,
+  showWallet,
+}: {
+  venues?: VenueSummary[];
+  positions?: VenuePositionRow[];
+  showWallet: boolean;
+}) {
+  const venueList =
+    venues ??
+    ([
+      { id: "hyperliquid", status: "empty", valueUsd: 0 },
+      { id: "polymarket", status: "empty", valueUsd: 0 },
+    ] satisfies VenueSummary[]);
+  const rows = positions ?? [];
+
+  return (
+    <div className="border-t border-zinc-800/80">
+      <ul>
+        {venueList.map((v) => (
+          <li
+            key={v.id}
+            className="flex items-center justify-between gap-3 py-3 text-sm"
+          >
+            <span className="inline-flex items-center gap-2 text-zinc-200">
+              <ProtocolIcon protocol={v.id} size={22} />
+              {venueLabel(v.id)}
+            </span>
+            <VenueStatusBadge venue={v} />
+          </li>
+        ))}
+      </ul>
+      {rows.length === 0 ? (
+        <p className="pb-3 text-sm text-zinc-500">
+          No open venue positions for linked wallets.
+        </p>
+      ) : (
+        <ul className="border-t border-zinc-800/60">
+          {rows.map((p, i) => (
+            <li
+              key={`${p.venue}:${p.title}:${p.walletAddress ?? ""}:${i}`}
+              className="flex items-start justify-between gap-3 py-3 text-sm"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  {p.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.iconUrl}
+                      alt=""
+                      width={22}
+                      height={22}
+                      className="h-[22px] w-[22px] shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <ProtocolIcon protocol={p.venue} size={22} />
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-zinc-100">
+                      {p.title}
+                    </p>
+                    <p className="truncate text-xs text-zinc-500">
+                      {venueLabel(p.venue)}
+                      {p.subtitle ? ` · ${p.subtitle}` : ""}
+                      {showWallet && p.walletAddress
+                        ? ` · ${shortAddr(p.walletAddress)}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="font-mono text-zinc-100">{usd(p.valueUsd)}</p>
+                {p.pnlUsd != null && p.pnlUsd !== 0 ? (
+                  <p
+                    className={`font-mono text-[11px] ${
+                      p.pnlUsd >= 0 ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    {p.pnlUsd >= 0 ? "+" : ""}
+                    {usd(p.pnlUsd)}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function SectionHeader({
   title,
   total,
@@ -488,15 +607,15 @@ export function DashboardPortfolio() {
     });
   }, []);
 
-  const loadPortfolio = useCallback(async () => {
+  const loadPortfolio = useCallback(async (opts?: { force?: boolean }) => {
     setLoading(true);
     setError(null);
     try {
-      const url =
-        selected === OVERVIEW
-          ? "/api/portfolio?scope=all"
-          : `/api/portfolio?address=${encodeURIComponent(selected)}`;
-      const res = await fetch(url);
+      const params = new URLSearchParams();
+      if (selected === OVERVIEW) params.set("scope", "all");
+      else params.set("address", selected);
+      if (opts?.force) params.set("refresh", "1");
+      const res = await fetch(`/api/portfolio?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load portfolio");
       setView(data as PortfolioView);
@@ -683,13 +802,24 @@ export function DashboardPortfolio() {
   return (
     <div className="ervo-scroll h-full overflow-y-auto">
       <div className="flex w-full flex-col gap-5 px-6 py-8 lg:px-10">
-        <header className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Dashboard
-          </h1>
-          <p className="text-sm text-zinc-500">
-            Tokens, venue positions, and DeFi — by wallet.
-          </p>
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Dashboard
+            </h1>
+            <p className="text-sm text-zinc-500">
+              Tokens, venue positions, and DeFi — by wallet.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={loading || !sessionReady}
+            onClick={() => void loadPortfolio({ force: true })}
+            className="shrink-0 rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-200 transition-colors hover:border-zinc-500 hover:text-white disabled:opacity-50"
+            title="Bypass 20-minute cache and reload"
+          >
+            {loading ? "Refreshing…" : "Hard refresh"}
+          </button>
         </header>
 
         {loading && (
@@ -735,7 +865,10 @@ export function DashboardPortfolio() {
             <div className="grid gap-3 sm:grid-cols-2">
               <AllocationBars
                 title="By sleeve"
-                total={Math.max(tokensTotal + defiTotal, 1)}
+                total={Math.max(
+                  tokensTotal + defiTotal + (view?.positionsValueUsd ?? 0),
+                  1,
+                )}
                 rows={sleeveRows}
               />
               <AllocationBars
@@ -857,37 +990,13 @@ export function DashboardPortfolio() {
                   <SectionHeader
                     title="Positions"
                     total={view?.positionsValueUsd ?? 0}
-                    hint="Hyperliquid & Polymarket"
+                    hint="Read-only Hyperliquid & Polymarket"
                   />
-                  <ul className="border-t border-zinc-800/80">
-                    {(
-                      view?.positions.venues ?? [
-                        {
-                          id: "hyperliquid" as const,
-                          status: "coming_soon" as const,
-                        },
-                        {
-                          id: "polymarket" as const,
-                          status: "coming_soon" as const,
-                        },
-                      ]
-                    ).map((v) => (
-                      <li
-                        key={v.id}
-                        className="flex items-center justify-between gap-3 py-3 text-sm"
-                      >
-                        <span className="inline-flex items-center gap-2 capitalize text-zinc-200">
-                          <ProtocolIcon protocol={v.id} size={22} />
-                          {v.id === "hyperliquid"
-                            ? "Hyperliquid"
-                            : "Polymarket"}
-                        </span>
-                        <span className="rounded bg-zinc-800/80 px-2 py-0.5 text-[11px] uppercase tracking-wide text-zinc-500">
-                          Coming soon
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <VenuePositionsPanel
+                    venues={view?.positions.venues}
+                    positions={view?.positions.positions}
+                    showWallet={showWallet}
+                  />
                 </section>
 
                 <section className="rounded-xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">

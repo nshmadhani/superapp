@@ -1,4 +1,5 @@
 import { scheduleZerionCall } from "./rate-limit";
+import { fetchVenuePositions } from "./venues";
 import {
   buildPortfolioView,
   type PortfolioView,
@@ -28,8 +29,8 @@ export type PortfolioSnapshot = {
   chainFamily?: "evm" | "solana";
 };
 
-/** In-process TTL so dashboard + chat don't re-hit Zerion for the same wallet. */
-const CACHE_TTL_MS = 30_000;
+/** Align with portfolio view cache (20m). Hard refresh bypasses both layers. */
+const CACHE_TTL_MS = 20 * 60 * 1000;
 const RETRY_429_DELAYS_MS = [1_500, 3_000, 6_000];
 
 function isZerion429(err: unknown): boolean {
@@ -185,17 +186,21 @@ async function fetchPortfolioUncached(
 export async function fetchPortfolio(
   address: string,
   apiKey = process.env.ZERION_API_KEY,
+  opts?: { force?: boolean },
 ): Promise<PortfolioSnapshot> {
   if (!apiKey) throw new Error("Missing ZERION_API_KEY");
 
   const key = normalizeAddress(address);
-  const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.snap;
+  if (opts?.force) {
+    cache.delete(key);
+  } else {
+    const cached = cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.snap;
+    }
+    const pending = inflight.get(key);
+    if (pending) return pending;
   }
-
-  const pending = inflight.get(key);
-  if (pending) return pending;
 
   const job = scheduleZerionCall(() =>
     fetchPortfolioUncachedWithRetry(address, apiKey),
@@ -218,7 +223,7 @@ export type AggregatedPortfolio = PortfolioView;
 /**
  * Shape a single-wallet Zerion snapshot into the dashboard/agent PortfolioView.
  */
-export function portfolioSnapshotToView(
+export async function portfolioSnapshotToView(
   snap: PortfolioSnapshot,
   wallet?: {
     walletId: string;
@@ -226,7 +231,7 @@ export function portfolioSnapshotToView(
     chainFamily: "evm" | "solana";
     source: string;
   },
-): PortfolioView {
+): Promise<PortfolioView> {
   const walletRows: PortfolioWalletRow[] = wallet
     ? [
         {
@@ -240,6 +245,23 @@ export function portfolioSnapshotToView(
         },
       ]
     : [];
+  const venuePositions = await fetchVenuePositions(
+    wallet
+      ? [
+          {
+            address: snap.address,
+            walletId: wallet.walletId,
+            walletLabel: wallet.label,
+            chainFamily: wallet.chainFamily,
+          },
+        ]
+      : [
+          {
+            address: snap.address,
+            chainFamily: detectChainFamily(snap.address),
+          },
+        ],
+  );
   return buildPortfolioView({
     legs: snap.positions.map((p) => ({
       ...p,
@@ -249,6 +271,7 @@ export function portfolioSnapshotToView(
     })),
     wallets: walletRows,
     asOf: snap.asOf,
+    venuePositions,
   });
 }
 
@@ -264,6 +287,7 @@ export async function fetchAggregatedPortfolio(
     source: string;
     label?: string;
   }>,
+  opts?: { force?: boolean },
 ): Promise<PortfolioView> {
   const results: Array<{
     wallet: (typeof wallets)[number];
@@ -274,7 +298,7 @@ export async function fetchAggregatedPortfolio(
   // Sequential await keeps ordering predictable; rate limiter also serializes HTTP.
   for (const w of wallets) {
     try {
-      const snap = await fetchPortfolio(w.address);
+      const snap = await fetchPortfolio(w.address, undefined, opts);
       results.push({ wallet: w, snap });
     } catch (err) {
       results.push({
@@ -316,9 +340,19 @@ export async function fetchAggregatedPortfolio(
     }
   }
 
+  const venuePositions = await fetchVenuePositions(
+    wallets.map((w) => ({
+      address: w.address,
+      walletId: w.id,
+      walletLabel: w.label,
+      chainFamily: w.chainFamily,
+    })),
+  );
+
   return buildPortfolioView({
     legs,
     wallets: walletRows,
     asOf: new Date().toISOString(),
+    venuePositions,
   });
 }
