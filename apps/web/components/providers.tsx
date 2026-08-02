@@ -10,6 +10,7 @@ import {
   type TurnkeyProviderConfig,
 } from "@turnkey/react-wallet-kit";
 import { AuthSync } from "./auth-sync";
+import { ChatRuntimeProvider } from "./chat/chat-runtime";
 
 const walletConnectProjectId =
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?.trim() ?? "";
@@ -157,7 +158,7 @@ export function Providers({ children }: { children: ReactNode }) {
       <WagmiProvider config={wagmiConfig}>
         <QueryClientProvider client={queryClient}>
           <AuthSync />
-          {children}
+          <ChatRuntimeProvider>{children}</ChatRuntimeProvider>
         </QueryClientProvider>
       </WagmiProvider>
     </TurnkeyProvider>

@@ -1,8 +1,7 @@
 "use client";
 
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
-import { useTurnkey } from "@turnkey/react-wallet-kit";
+import { Chat, useChat } from "@ai-sdk/react";
+import type { UIMessage } from "ai";
 import { Loader2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatComposer } from "./chat-composer";
@@ -11,6 +10,7 @@ import { ChatEmptyState } from "./empty-state";
 import { useStickToBottom } from "./use-stick-to-bottom";
 import { parseTransferSubmitted } from "@/lib/transfer-submitted";
 import { textFromParts } from "./tool-extractors";
+import { useChatRuntime } from "./chat-runtime";
 
 function dbRowToUIMessage(m: {
   id: string;
@@ -41,33 +41,27 @@ export function ChatPanel({
   chatId: string;
   onMissingChat?: () => void;
 }) {
+  const runtime = useChatRuntime();
   const [input, setInput] = useState("");
-  const [initialMessages, setInitialMessages] = useState<UIMessage[] | null>(
-    null,
-  );
-  const { wallets } = useTurnkey();
-  const signableAddressesRef = useRef<string[]>([]);
-
-  /** Live Turnkey session accounts — what Confirm can actually sign with. */
-  const signableAddresses = useMemo(() => {
-    const out: string[] = [];
-    for (const w of wallets ?? []) {
-      for (const a of w.accounts ?? []) {
-        if (a?.address) out.push(String(a.address));
-      }
-    }
-    return out;
-  }, [wallets]);
-
-  useEffect(() => {
-    signableAddressesRef.current = signableAddresses;
-  }, [signableAddresses]);
+  // Bump after ensure/fetch so we re-render when a session appears in the registry.
+  const [, setSessionEpoch] = useState(0);
+  const chat = runtime.getChat(chatId);
 
   useEffect(() => {
     let cancelled = false;
-    setInitialMessages(null);
+    runtime.setVisible(chatId, true);
+
+    // Existing runtime session: no bootstrap needed (avoid sync setState here).
+    if (runtime.getChat(chatId)) {
+      return () => {
+        cancelled = true;
+        runtime.setVisible(chatId, false);
+      };
+    }
+
     void (async () => {
       const res = await fetch(`/api/chats/${chatId}`);
+      if (cancelled) return;
       if (res.status === 404) {
         onMissingChat?.();
         return;
@@ -76,32 +70,18 @@ export function ChatPanel({
       const data = await res.json();
       if (cancelled) return;
       const msgs: UIMessage[] = (data.messages ?? []).map(dbRowToUIMessage);
-      setInitialMessages(msgs);
+      runtime.ensureChat(chatId, msgs);
+      // Async continuation — re-render so getChat(chatId) resolves.
+      if (!cancelled) setSessionEpoch((n) => n + 1);
     })();
+
     return () => {
       cancelled = true;
+      runtime.setVisible(chatId, false);
     };
-  }, [chatId, onMissingChat]);
+  }, [chatId, onMissingChat, runtime]);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        prepareSendMessagesRequest: ({ messages, id, trigger, messageId }) => ({
-          body: {
-            id,
-            messages,
-            trigger,
-            messageId,
-            chatId,
-            signableAddresses: signableAddressesRef.current,
-          },
-        }),
-      }),
-    [chatId],
-  );
-
-  if (initialMessages === null) {
+  if (!chat) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-zinc-500">
         <Loader2 className="mr-2 size-4 animate-spin" />
@@ -113,9 +93,8 @@ export function ChatPanel({
   return (
     <ChatInner
       key={chatId}
+      chat={chat}
       chatId={chatId}
-      transport={transport}
-      initialMessages={initialMessages}
       input={input}
       setInput={setInput}
     />
@@ -123,23 +102,18 @@ export function ChatPanel({
 }
 
 function ChatInner({
+  chat,
   chatId,
-  transport,
-  initialMessages,
   input,
   setInput,
 }: {
+  chat: Chat<UIMessage>;
   chatId: string;
-  transport: DefaultChatTransport<UIMessage>;
-  initialMessages: UIMessage[];
   input: string;
   setInput: (v: string) => void;
 }) {
   const { messages, sendMessage, status, error, stop, regenerate, clearError } =
-    useChat({
-      transport,
-      messages: initialMessages,
-    });
+    useChat({ chat });
   const [submittedPlanIdsLocal, setSubmittedPlanIds] = useState<Set<string>>(
     () => new Set(),
   );

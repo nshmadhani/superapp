@@ -6,6 +6,7 @@ import { AuthState, useTurnkey } from "@turnkey/react-wallet-kit";
 import { Bot, LayoutDashboard, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ErvoLogo } from "@/components/ervo-logo";
+import { useBusyChatIds } from "@/components/chat/chat-runtime";
 import { onErvoAuthed, waitForErvoSession } from "@/lib/ervo-session";
 import type { AgentRun } from "@ervo/agent-jobs/types";
 
@@ -41,6 +42,7 @@ export function Sidebar() {
   const loggedIn = authState === AuthState.Authenticated && !!session;
   const [chats, setChats] = useState<ChatRow[]>([]);
   const [agents, setAgents] = useState<AgentRun[]>([]);
+  const busyChatIds = useBusyChatIds();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -134,10 +136,12 @@ export function Sidebar() {
           <ul className="mb-4 space-y-0.5">
             {chats.map((c) => {
               const href = `/app/c/${c.id}`;
+              const generating = busyChatIds.has(c.id);
               return (
                 <li key={c.id}>
                   <Link href={href} className={itemClass(pathname === href)}>
                     {c.title || "New chat"}
+                    {generating ? " · …" : ""}
                   </Link>
                 </li>
               );
