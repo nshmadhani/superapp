@@ -50,6 +50,11 @@ const turnkeyConfig: TurnkeyProviderConfig = {
   organizationId: process.env.NEXT_PUBLIC_TURNKEY_ORGANIZATION_ID!,
   authProxyConfigId: process.env.NEXT_PUBLIC_TURNKEY_AUTH_PROXY_CONFIG_ID!,
   autoRefreshManagedState: true,
+  auth: {
+    // SDK auto-refresh renews with *remaining* seconds (can collapse to ~60s).
+    // AuthSync keep-alive refreshes with a long TTL instead.
+    autoRefreshSession: false,
+  },
   ui: {
     darkMode: true,
   },
@@ -142,6 +147,11 @@ export function Providers({ children }: { children: ReactNode }) {
       config={turnkeyConfig}
       callbacks={{
         onError: logTurnkeyError,
+        onSessionExpired: () => {
+          console.warn(
+            "Turnkey session expired — log in again (or raise Auth Proxy session TTL in Turnkey dashboard).",
+          );
+        },
       }}
     >
       <WagmiProvider config={wagmiConfig}>

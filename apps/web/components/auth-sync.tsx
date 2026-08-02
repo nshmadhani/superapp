@@ -8,6 +8,16 @@ import { rememberTurnkeyWallets } from "@/lib/turnkey-refresh";
 export const ERVO_AUTHED_EVENT = "ervo:authed";
 export const ERVO_LOGOUT_EVENT = "ervo:logout";
 
+/** How long each keep-alive refresh should last. */
+const SESSION_TTL_SECONDS = String(60 * 60 * 24 * 7); // 7 days
+/**
+ * If less than this remains, mint a new long-lived session.
+ * Auth Proxy defaults are ~15m, so the first check after login upgrades immediately.
+ */
+const REFRESH_WHEN_REMAINING_MS = 60 * 60 * 1000; // 1 hour
+/** How often to check remaining TTL. */
+const KEEP_ALIVE_CHECK_MS = 60 * 1000;
+
 /** Drop auto-imported Browser wallets / EVM case-dupes. Never wipe labeled Connect wallets. */
 async function cleanupStaleExternalWallets() {
   try {
@@ -26,11 +36,45 @@ async function cleanupStaleExternalWallets() {
  * Wallet sync waits for auth cookie so /api/wallets never 401s on race.
  */
 export function AuthSync() {
-  const { authState, session, user, wallets } = useTurnkey();
+  const { authState, session, user, wallets, refreshSession } = useTurnkey();
   const syncedAuthKey = useRef<string | null>(null);
   const syncedWalletSig = useRef<string | null>(null);
   const authReady = useRef(false);
   const pendingWallets = useRef<typeof wallets | null>(null);
+  const refreshingSession = useRef(false);
+
+  // Keep Turnkey sessions alive. Auth Proxy default is ~15m; without this the
+  // UI flips to "Log in" as soon as the session JWT expires.
+  useEffect(() => {
+    if (authState !== AuthState.Authenticated || !session?.expiry) return;
+
+    const maybeRefresh = async () => {
+      if (refreshingSession.current) return;
+      const remainingMs = session.expiry * 1000 - Date.now();
+      if (remainingMs <= 0) return;
+      if (remainingMs > REFRESH_WHEN_REMAINING_MS) return;
+
+      refreshingSession.current = true;
+      try {
+        await refreshSession({ expirationSeconds: SESSION_TTL_SECONDS });
+      } catch (err) {
+        console.error("Turnkey session keep-alive failed", err);
+      } finally {
+        refreshingSession.current = false;
+      }
+    };
+
+    void maybeRefresh();
+    const id = window.setInterval(() => void maybeRefresh(), KEEP_ALIVE_CHECK_MS);
+    const onVis = () => {
+      if (document.visibilityState === "visible") void maybeRefresh();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [authState, session?.expiry, refreshSession]);
 
   useEffect(() => {
     if (authState !== AuthState.Authenticated || !session || !user) {
