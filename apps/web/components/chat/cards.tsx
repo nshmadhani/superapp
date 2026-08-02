@@ -3,10 +3,8 @@
 import Link from "next/link";
 import { Fragment } from "react";
 import { Bot, ExternalLink } from "lucide-react";
-import { walletDisplayName } from "@/lib/wallet-display";
 import type {
   Clarification,
-  PortfolioSnap,
   SearchHit,
   SpawnedAgent,
 } from "./tool-extractors";
@@ -101,125 +99,6 @@ export function CitationsCard({ hits }: { hits: SearchHit[] }) {
           </li>
         ))}
       </ul>
-    </div>
-  );
-}
-
-export function PortfolioCard({ snap }: { snap: PortfolioSnap }) {
-  const isOverview = snap.type === "portfolio_overview";
-  const title = isOverview
-    ? "Overview"
-    : walletDisplayName({ label: snap.label, source: "turnkey" });
-
-  const tokenRows =
-    snap.tokens && snap.tokens.length > 0
-      ? snap.tokens.slice(0, 8).map((t) => ({
-          key: t.symbol,
-          label: t.symbol,
-          meta:
-            t.chainCount && t.chainCount > 1
-              ? `${t.chainCount} chains`
-              : t.quantity,
-          valueUsd: t.valueUsd,
-        }))
-      : Array.isArray(snap.positions)
-        ? snap.positions.slice(0, 8).map((p, i) => ({
-            key: `${p.symbol}-${i}`,
-            label: p.symbol,
-            meta: p.quantity,
-            valueUsd: p.valueUsd,
-          }))
-        : [];
-
-  return (
-    <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-2.5">
-      <div className="flex items-baseline justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
-          {title}
-        </p>
-        {!isOverview && snap.address && (
-          <p className="font-mono text-[11px] text-zinc-600">
-            {snap.address.slice(0, 4)}…{snap.address.slice(-4)}
-          </p>
-        )}
-      </div>
-      <p className="text-xl font-semibold text-zinc-100">
-        $
-        {snap.totalValueUsd.toLocaleString(undefined, {
-          maximumFractionDigits: 2,
-        })}
-      </p>
-      {(snap.tokensValueUsd != null || snap.defiValueUsd != null) && (
-        <p className="text-[11px] text-zinc-500">
-          Tokens $
-          {(snap.tokensValueUsd ?? 0).toLocaleString(undefined, {
-            maximumFractionDigits: 0,
-          })}
-          {snap.defiValueUsd != null && snap.defiValueUsd > 0
-            ? ` · DeFi $${snap.defiValueUsd.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}`
-            : ""}
-        </p>
-      )}
-      {isOverview && snap.wallets && snap.wallets.length > 0 && (
-        <ul className="space-y-1 border-b border-zinc-800 pb-2">
-          {snap.wallets.map((w) => (
-            <li
-              key={w.walletId}
-              className="flex justify-between gap-2 text-xs text-zinc-400"
-            >
-              <span className="text-zinc-200">
-                {walletDisplayName({ label: w.label })}
-              </span>
-              <span>
-                $
-                {w.totalValueUsd.toLocaleString(undefined, {
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      <ul className="space-y-1">
-        {tokenRows.map((row) => (
-          <li
-            key={row.key}
-            className="flex justify-between gap-2 text-xs text-zinc-400"
-          >
-            <span>
-              <span className="text-zinc-200">{row.label}</span>
-              <span className="ml-1.5 text-zinc-600">{row.meta}</span>
-            </span>
-            <span>
-              {row.valueUsd == null
-                ? "—"
-                : `$${row.valueUsd.toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })}`}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {snap.defi && snap.defi.length > 0 && (
-        <ul className="space-y-1 border-t border-zinc-800 pt-2">
-          {snap.defi.slice(0, 4).map((d) => (
-            <li
-              key={d.protocol}
-              className="flex justify-between gap-2 text-xs text-zinc-400"
-            >
-              <span className="text-emerald-400/90">{d.protocol}</span>
-              <span>
-                $
-                {d.valueUsd.toLocaleString(undefined, {
-                  maximumFractionDigits: 2,
-                })}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

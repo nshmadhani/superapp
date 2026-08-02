@@ -1,7 +1,12 @@
+import {
+  cachedPortfolioView,
+  portfolioAddressCacheKey,
+} from "./api-cache";
 import { scheduleZerionCall } from "./rate-limit";
 import { fetchVenuePositions } from "./venues";
 import {
   buildPortfolioView,
+  mergePortfolioViews,
   type PortfolioView,
   type PortfolioWalletRow,
 } from "./view";
@@ -29,8 +34,6 @@ export type PortfolioSnapshot = {
   chainFamily?: "evm" | "solana";
 };
 
-/** Align with portfolio view cache (20m). Hard refresh bypasses both layers. */
-const CACHE_TTL_MS = 20 * 60 * 1000;
 const RETRY_429_DELAYS_MS = [1_500, 3_000, 6_000];
 
 function isZerion429(err: unknown): boolean {
@@ -60,12 +63,7 @@ async function fetchPortfolioUncachedWithRetry(
   throw lastErr instanceof Error ? lastErr : new Error("portfolio_failed");
 }
 
-type CacheEntry = {
-  expiresAt: number;
-  snap: PortfolioSnapshot;
-};
-
-const cache = new Map<string, CacheEntry>();
+/** Same-isolate stampede control only — durable TTL lives in portfolio_cache. */
 const inflight = new Map<string, Promise<PortfolioSnapshot>>();
 
 function normalizeAddress(address: string): string {
@@ -77,7 +75,6 @@ function detectChainFamily(address: string): "evm" | "solana" {
 }
 
 export function clearPortfolioCache(): void {
-  cache.clear();
   inflight.clear();
 }
 
@@ -163,7 +160,7 @@ async function fetchPortfolioUncached(
       chainId,
       address: impl?.address ?? null,
       iconUrl: attrs.fungible_info?.icon?.url ?? null,
-      kind: isDefi ? "defi" : "wallet",
+      kind: isDefi ? ("defi" as const) : ("wallet" as const),
       protocol: attrs.protocol ?? null,
       positionType: attrs.position_type ?? null,
     };
@@ -181,7 +178,8 @@ async function fetchPortfolioUncached(
 
 /**
  * Fetch fungible positions for an EVM or Solana address via Zerion.
- * Rate-limited (≤1/sec), TTL-cached, and deduped while in flight.
+ * Rate-limited (≤1/sec) and deduped while in flight.
+ * Durable TTL caching is at the PortfolioView layer (`cachedPortfolioView`).
  */
 export async function fetchPortfolio(
   address: string,
@@ -191,27 +189,16 @@ export async function fetchPortfolio(
   if (!apiKey) throw new Error("Missing ZERION_API_KEY");
 
   const key = normalizeAddress(address);
-  if (opts?.force) {
-    cache.delete(key);
-  } else {
-    const cached = cache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.snap;
-    }
+  if (!opts?.force) {
     const pending = inflight.get(key);
     if (pending) return pending;
   }
 
   const job = scheduleZerionCall(() =>
     fetchPortfolioUncachedWithRetry(address, apiKey),
-  )
-    .then((snap) => {
-      cache.set(key, { snap, expiresAt: Date.now() + CACHE_TTL_MS });
-      return snap;
-    })
-    .finally(() => {
-      inflight.delete(key);
-    });
+  ).finally(() => {
+    inflight.delete(key);
+  });
 
   inflight.set(key, job);
   return job;
@@ -275,9 +262,37 @@ export async function portfolioSnapshotToView(
   });
 }
 
+async function loadWalletView(
+  wallet: {
+    id: string;
+    address: string;
+    chainFamily: "evm" | "solana";
+    source: string;
+    label?: string;
+  },
+  opts?: { force?: boolean },
+): Promise<PortfolioView> {
+  return cachedPortfolioView(
+    portfolioAddressCacheKey(wallet.address),
+    async () => {
+      const snap = await fetchPortfolio(wallet.address, undefined, opts);
+      return portfolioSnapshotToView(snap, {
+        walletId: wallet.id,
+        label: wallet.label,
+        chainFamily: wallet.chainFamily,
+        source: wallet.source,
+      });
+    },
+    {
+      force: opts?.force,
+      address: normalizeAddress(wallet.address),
+    },
+  );
+}
+
 /**
  * Aggregate many wallets into a shaped PortfolioView.
- * Upstream calls still go through the shared 1/sec queue — do not fan out raw HTTP in parallel.
+ * Each wallet is loaded via the durable address cache; callers wrap with user:all.
  */
 export async function fetchAggregatedPortfolio(
   wallets: Array<{
@@ -289,70 +304,31 @@ export async function fetchAggregatedPortfolio(
   }>,
   opts?: { force?: boolean },
 ): Promise<PortfolioView> {
-  const results: Array<{
-    wallet: (typeof wallets)[number];
-    snap: PortfolioSnapshot | null;
-    error?: string;
-  }> = [];
-
+  const views: PortfolioView[] = [];
   // Sequential await keeps ordering predictable; rate limiter also serializes HTTP.
   for (const w of wallets) {
     try {
-      const snap = await fetchPortfolio(w.address, undefined, opts);
-      results.push({ wallet: w, snap });
+      views.push(await loadWalletView(w, opts));
     } catch (err) {
-      results.push({
-        wallet: w,
-        snap: null,
-        error: err instanceof Error ? err.message : "portfolio_failed",
-      });
+      views.push(
+        buildPortfolioView({
+          legs: [],
+          wallets: [
+            {
+              walletId: w.id,
+              address: w.address,
+              label: w.label,
+              chainFamily: w.chainFamily,
+              source: w.source,
+              totalValueUsd: 0,
+              positions: [],
+              error: err instanceof Error ? err.message : "portfolio_failed",
+            },
+          ],
+          asOf: new Date().toISOString(),
+        }),
+      );
     }
   }
-
-  const legs: Array<
-    PortfolioPosition & {
-      walletId: string;
-      walletLabel?: string;
-      walletAddress: string;
-    }
-  > = [];
-  const walletRows: PortfolioWalletRow[] = [];
-
-  for (const r of results) {
-    const total = r.snap?.totalValueUsd ?? 0;
-    walletRows.push({
-      walletId: r.wallet.id,
-      address: r.wallet.address,
-      label: r.wallet.label,
-      chainFamily: r.wallet.chainFamily,
-      source: r.wallet.source,
-      totalValueUsd: total,
-      positions: r.snap?.positions ?? [],
-      error: r.error,
-    });
-    for (const p of r.snap?.positions ?? []) {
-      legs.push({
-        ...p,
-        walletId: r.wallet.id,
-        walletLabel: r.wallet.label,
-        walletAddress: r.wallet.address,
-      });
-    }
-  }
-
-  const venuePositions = await fetchVenuePositions(
-    wallets.map((w) => ({
-      address: w.address,
-      walletId: w.id,
-      walletLabel: w.label,
-      chainFamily: w.chainFamily,
-    })),
-  );
-
-  return buildPortfolioView({
-    legs,
-    wallets: walletRows,
-    asOf: new Date().toISOString(),
-    venuePositions,
-  });
+  return mergePortfolioViews(views);
 }

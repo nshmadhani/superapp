@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { resolveTokenIcon, resolveChainIcon, resolveProtocolIcon } from "./icons";
-import { buildPortfolioView } from "./view";
+import { buildPortfolioView, mergePortfolioViews } from "./view";
 import type { PortfolioPosition } from "./portfolio";
 
 describe("resolveTokenIcon", () => {
@@ -166,5 +166,70 @@ describe("buildPortfolioView", () => {
     });
     expect(view.positionsValueUsd).toBe(250);
     expect(view.totalValueUsd).toBe(350);
+  });
+});
+
+describe("mergePortfolioViews", () => {
+  const usdc: PortfolioPosition = {
+    symbol: "USDC",
+    name: "USD Coin",
+    quantity: "100",
+    valueUsd: 100,
+    chainId: "base",
+    address: "0x8335",
+    kind: "wallet",
+  };
+  const ethPos: PortfolioPosition = {
+    symbol: "ETH",
+    name: "Ether",
+    quantity: "1",
+    valueUsd: 3000,
+    chainId: "base",
+    address: null,
+    kind: "wallet",
+  };
+
+  it("merges tokens and venue equity across wallets", () => {
+    const a = buildPortfolioView({
+      legs: [{ ...usdc, walletId: "1", walletAddress: "0x1" }],
+      wallets: [
+        {
+          walletId: "1",
+          address: "0x1",
+          chainFamily: "evm",
+          source: "turnkey",
+          totalValueUsd: 100,
+          positions: [usdc],
+        },
+      ],
+      venuePositions: {
+        venues: [
+          { id: "hyperliquid", status: "ready", valueUsd: 50 },
+          { id: "polymarket", status: "empty", valueUsd: 0 },
+        ],
+        positions: [
+          { venue: "hyperliquid", title: "ETH perp", valueUsd: 50 },
+        ],
+        valueUsd: 50,
+      },
+    });
+    const b = buildPortfolioView({
+      legs: [{ ...ethPos, walletId: "2", walletAddress: "0x2" }],
+      wallets: [
+        {
+          walletId: "2",
+          address: "0x2",
+          chainFamily: "evm",
+          source: "turnkey",
+          totalValueUsd: 3000,
+          positions: [ethPos],
+        },
+      ],
+    });
+    const merged = mergePortfolioViews([a, b]);
+    expect(merged.wallets).toHaveLength(2);
+    expect(merged.tokensValueUsd).toBe(3100);
+    expect(merged.positionsValueUsd).toBe(50);
+    expect(merged.totalValueUsd).toBe(3150);
   });
 });

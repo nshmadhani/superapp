@@ -8,7 +8,6 @@ import { AgentRunView } from "./agent-run";
 import {
   CitationsCard,
   ClarificationCard,
-  PortfolioCard,
   SpawnAgentCard,
   TransferSubmittedCard,
 } from "./cards";
@@ -18,7 +17,6 @@ import {
   extractCitations,
   extractClarifications,
   extractPlanReviews,
-  extractPortfolios,
   extractSpawnedAgents,
   textFromParts,
 } from "./tool-extractors";
@@ -44,7 +42,6 @@ export function ChatMessage({
   const steps = extractAgentSteps(message.parts);
   const reviews = extractPlanReviews(message.parts);
   const citations = extractCitations(message.parts);
-  const portfolios = extractPortfolios(message.parts);
   const clarifications = extractClarifications(message.parts);
   const spawned = extractSpawnedAgents(message.parts);
   const text = textFromParts(message.parts);
@@ -94,9 +91,6 @@ export function ChatMessage({
         </div>
       )}
 
-      {portfolios.map((p, idx) => (
-        <PortfolioCard key={`${message.id}-pf-${idx}`} snap={p} />
-      ))}
       <CitationsCard hits={citations} />
       {clarifications.map((c, idx) => (
         <ClarificationCard

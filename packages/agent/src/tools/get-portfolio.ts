@@ -4,6 +4,7 @@ import {
   cachedPortfolioView,
   fetchAggregatedPortfolio,
   fetchPortfolio,
+  portfolioAddressCacheKey,
   portfolioApiCacheKey,
   portfolioSnapshotToView,
 } from "@ervo/zerion";
@@ -20,7 +21,7 @@ function addressesMatch(a: string, b: string): boolean {
 export function getPortfolioTool(ctx: AgentContext) {
   return tool({
     description:
-      "Fetch current balances via Zerion plus read-only Hyperliquid and Polymarket positions. Returns shaped portfolio: tokens (grouped by symbol across chains), positions (HL/Polymarket), and defi (by protocol). Uses the same 20-minute cache as the dashboard — do not force-refresh unless the user asks. Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
+      "Fetch current balances via Zerion plus read-only Hyperliquid and Polymarket positions. Returns shaped portfolio: tokens (grouped by symbol across chains), positions (HL/Polymarket), and defi (by protocol). Uses the same 20-minute durable cache as the dashboard — do not force-refresh unless the user asks. Prefer walletId from list_wallets. Pass all=true to aggregate every linked wallet. Always inspect native gas (ETH/HYPE/SOL) on the relevant chain before proposing swaps, bridges, or lends — ~0 native means the wallet cannot sign ERC20 txs on that chain.",
     inputSchema: z.object({
       walletId: z
         .string()
@@ -50,6 +51,7 @@ export function getPortfolioTool(ctx: AgentContext) {
           const view = await cachedPortfolioView(
             portfolioApiCacheKey(ctx.userId, "all"),
             () => fetchAggregatedPortfolio(wallets),
+            { userId: ctx.userId },
           );
           return {
             type: "portfolio_overview" as const,
@@ -93,7 +95,7 @@ export function getPortfolioTool(ctx: AgentContext) {
         }
 
         const view = await cachedPortfolioView(
-          portfolioApiCacheKey(ctx.userId, target.address),
+          portfolioAddressCacheKey(target.address),
           async () => {
             const snapshot = await fetchPortfolio(target.address);
             return portfolioSnapshotToView(snapshot, {
@@ -103,6 +105,7 @@ export function getPortfolioTool(ctx: AgentContext) {
               source: target.source,
             });
           },
+          { address: target.address },
         );
         return {
           type: "portfolio" as const,

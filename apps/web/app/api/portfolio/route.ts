@@ -4,6 +4,7 @@ import {
   cachedPortfolioView,
   fetchAggregatedPortfolio,
   fetchPortfolio,
+  portfolioAddressCacheKey,
   portfolioApiCacheKey,
   portfolioSnapshotToView,
   type PortfolioView,
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
       const view = await cachedPortfolioView(
         portfolioApiCacheKey(userId, "all"),
         () => fetchAggregatedPortfolio(wallets, { force }),
-        { force },
+        { force, userId },
       );
       return Response.json(view);
     }
@@ -73,7 +74,7 @@ export async function GET(req: Request) {
     }
 
     const view = await cachedPortfolioView(
-      portfolioApiCacheKey(userId, owned.address),
+      portfolioAddressCacheKey(owned.address),
       async () => {
         const snapshot = await fetchPortfolio(owned.address, undefined, {
           force,
@@ -85,7 +86,7 @@ export async function GET(req: Request) {
           source: owned.source,
         });
       },
-      { force },
+      { force, address: owned.address },
     );
 
     return Response.json({

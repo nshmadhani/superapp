@@ -29,7 +29,7 @@ Without these, Ervo is “chat DeFi,” not in the Gina / Otto / Cove category.
 - [ ] **Hyperliquid VenueAccount** — link/fund + confirmable trade/deposit (biggest Direct-rival hole)
 - [ ] **Polymarket VenueAccount** — link + confirmable order (incl. proxy-wallet discovery beyond EOA address lookup)
 - [x] **Read-only HL + Polymarket balances** — dashboard Positions + `get_portfolio` (public APIs by linked address; no VenueAccount yet)
-- [ ] **Move portfolio cache to Supabase** — today in-process 20m TTL shared by dashboard + AI; hard refresh bypasses. Later: durable/shared Supabase (edge function or table) so multi-instance deploys share one cache
+- [x] **Durable portfolio cache (Supabase `portfolio_cache`)** — 20m TTL; keys `address:<addr>` + `user:<id>:all`; dashboard + AI share; hard refresh bypasses. Address rows are the building block for a future public portfolio API
 - [ ] **Portfolio chat ≡ dashboard truth** — durable multi-wallet inventory; no re-explaining holdings every session
 
 ## P1 — Compete (parity after home + venues are real)

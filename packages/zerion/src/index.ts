@@ -9,6 +9,7 @@ export {
 } from "./portfolio";
 export {
   buildPortfolioView,
+  mergePortfolioViews,
   type PortfolioView,
   type PortfolioLeg,
   type TokenGroup,
@@ -25,6 +26,8 @@ export {
   cachedPortfolioView,
   clearPortfolioApiCache,
   portfolioApiCacheKey,
+  portfolioAddressCacheKey,
+  portfolioUserAllCacheKey,
   PORTFOLIO_VIEW_CACHE_TTL_MS,
 } from "./api-cache";
 export {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { clearPortfolioApiCache } from "./api-cache";
 import {
   clearPortfolioCache,
   fetchAggregatedPortfolio,
@@ -34,14 +35,19 @@ const SOL_ADDR = "So11111111111111111111111111111111111111112";
 describe("fetchPortfolio", () => {
   beforeEach(() => {
     clearPortfolioCache();
+    clearPortfolioApiCache();
     resetZerionRateLimitForTests();
     vi.stubEnv("ZERION_API_KEY", "test-key");
+    vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "");
+    vi.stubEnv("SUPABASE_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.unstubAllEnvs();
     clearPortfolioCache();
+    clearPortfolioApiCache();
     resetZerionRateLimitForTests();
   });
 
@@ -129,12 +135,12 @@ describe("fetchPortfolio", () => {
     expect(snap.positions[0]?.name).toContain("Morpho");
   });
 
-  it("serves cache on second call without another HTTP", async () => {
+  it("does not keep a process TTL cache (durable cache is PortfolioView layer)", async () => {
     const fetchMock = vi.fn().mockResolvedValue(mockOk());
     vi.stubGlobal("fetch", fetchMock);
     await fetchPortfolio(EVM_ADDR, "test-key");
-    await fetchPortfolio(EVM_ADDR.toUpperCase().replace("0X", "0x"), "test-key");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await fetchPortfolio(EVM_ADDR, "test-key");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("dedupes in-flight requests for the same address", async () => {

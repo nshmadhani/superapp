@@ -6,47 +6,6 @@ export type PlanReview = ComponentProps<typeof TxReviewCard>["review"];
 
 export type SearchHit = { title: string; url: string; content: string };
 
-export type PortfolioSnap = {
-  address?: string;
-  label?: string;
-  totalValueUsd: number;
-  tokensValueUsd?: number;
-  defiValueUsd?: number;
-  positionsValueUsd?: number;
-  type?: string;
-  /** New shaped DTO — token groups by symbol. */
-  tokens?: Array<{
-    symbol: string;
-    name: string;
-    quantity: string;
-    valueUsd: number;
-    chainCount?: number;
-  }>;
-  defi?: Array<{
-    protocol: string;
-    valueUsd: number;
-  }>;
-  /** Legacy flat list — still accepted for older tool outputs. */
-  positions?:
-    | Array<{
-        symbol: string;
-        name: string;
-        quantity: string;
-        valueUsd: number | null;
-        walletLabel?: string;
-      }>
-    | {
-        venues?: Array<{ id: string; status: string }>;
-        valueUsd?: number;
-      };
-  wallets?: Array<{
-    walletId: string;
-    label?: string;
-    totalValueUsd: number;
-    chainFamily?: string;
-  }>;
-};
-
 export type Clarification = {
   type: "clarification";
   question: string;
@@ -136,27 +95,6 @@ export function extractCitations(parts: UIMessage["parts"]): SearchHit[] {
     }
   }
   return hits;
-}
-
-export function extractPortfolios(parts: UIMessage["parts"]): PortfolioSnap[] {
-  const snaps: PortfolioSnap[] = [];
-  for (const part of parts ?? []) {
-    if (!part || typeof part !== "object" || !("type" in part)) continue;
-    if (String(part.type) !== "tool-get_portfolio") continue;
-    const output = toolOutput(part) as
-      | (PortfolioSnap & { error?: string })
-      | undefined;
-    if (
-      output &&
-      !output.error &&
-      (output.address ||
-        output.type === "portfolio_overview" ||
-        output.type === "portfolio")
-    ) {
-      snaps.push(output);
-    }
-  }
-  return snaps;
 }
 
 export function extractClarifications(

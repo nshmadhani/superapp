@@ -34,3 +34,11 @@ export {
   type PersistedAgentWallet,
 } from "./agent-runs";
 export { encryptPrivateKey, decryptPrivateKey } from "./crypto";
+export {
+  getPortfolioCache,
+  upsertPortfolioCache,
+  deletePortfolioCache,
+  deletePortfolioCacheByAddress,
+  portfolioCacheAvailable,
+  type PortfolioCacheRow,
+} from "./portfolio-cache";

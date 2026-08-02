@@ -218,3 +218,67 @@ export function buildPortfolioView(opts: {
     wallets: opts.wallets ?? [],
   };
 }
+
+function mergeVenuePositions(views: PortfolioView[]): VenuePositions {
+  const byVenue = new Map<VenueId, VenueSummary>();
+  for (const id of ["hyperliquid", "polymarket"] as VenueId[]) {
+    byVenue.set(id, { id, status: "empty", valueUsd: 0 });
+  }
+  const positions: VenuePositionRow[] = [];
+
+  for (const view of views) {
+    for (const v of view.positions.venues) {
+      const cur = byVenue.get(v.id) ?? {
+        id: v.id,
+        status: "empty" as const,
+        valueUsd: 0,
+      };
+      if (v.status === "error" && cur.status !== "ready") {
+        byVenue.set(v.id, {
+          id: v.id,
+          status: "error",
+          valueUsd: cur.valueUsd,
+          error: v.error ?? cur.error,
+        });
+      } else if (v.status === "ready" || v.valueUsd > 0) {
+        byVenue.set(v.id, {
+          id: v.id,
+          status: "ready",
+          valueUsd: cur.valueUsd + v.valueUsd,
+          error: undefined,
+        });
+      } else if (cur.status === "empty" && v.status === "empty") {
+        // keep empty
+      }
+    }
+    positions.push(...view.positions.positions);
+  }
+
+  positions.sort((a, b) => b.valueUsd - a.valueUsd);
+  const venues = [...byVenue.values()];
+  const valueUsd = venues.reduce((s, v) => s + v.valueUsd, 0);
+  return { venues, positions, valueUsd };
+}
+
+/** Merge per-wallet PortfolioViews into one overview (tokens/defi/venues/wallets). */
+export function mergePortfolioViews(views: PortfolioView[]): PortfolioView {
+  if (views.length === 0) {
+    return buildPortfolioView({ legs: [] });
+  }
+  if (views.length === 1) return views[0]!;
+
+  const legs: PortfolioLeg[] = [];
+  const wallets: PortfolioWalletRow[] = [];
+  for (const view of views) {
+    wallets.push(...view.wallets);
+    for (const t of view.tokens) legs.push(...t.legs);
+    for (const d of view.defi) legs.push(...d.legs);
+  }
+
+  return buildPortfolioView({
+    legs,
+    wallets,
+    asOf: new Date().toISOString(),
+    venuePositions: mergeVenuePositions(views),
+  });
+}

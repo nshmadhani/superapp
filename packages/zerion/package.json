@@ -10,6 +10,9 @@
     "test": "vitest run",
     "build": "tsc --noEmit"
   },
+  "dependencies": {
+    "@ervo/db": "workspace:*"
+  },
   "devDependencies": {
     "typescript": "^5.8.0",
     "vitest": "^3.0.0"
